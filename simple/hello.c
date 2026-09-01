@@ -1,4 +1,4 @@
-volatile unsigned int *const UART0DR = (unsigned int *) 0x3F201000;
+volatile unsigned int *const UART0DR = (unsigned int *) 0x1c28000;
 
 void print_uart0(const char *s) {
     while (*s != '\0') {
