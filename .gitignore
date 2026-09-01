@@ -34,3 +34,5 @@ makefile.hostap.org
 firmware.bin
 firmware.o
 log.txt
+
+docs/book
