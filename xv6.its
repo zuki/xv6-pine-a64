@@ -1,0 +1,35 @@
+/dts-v1/;
+
+/ {
+    description = "xv6 for Pine A64+";
+    #address-cells = <1>;
+
+    images {
+        kernel {
+            description = "xv6 kernel";
+            data = /incbin/("xv6.bin");
+            type = "kernel";
+            arch = "arm64";
+            os = "linux"; // U-BootにLinuxと同等に扱わせるため
+            compression = "none";
+            load = <0x42000000>;      // xv6を配置したいメモリのアドレス
+            entry = <0x42000000>;     // xv6のエントリポイント
+        };
+        fdt {
+            description = "pine A64+ dtb";
+            data = /incbin/("sun50i-a64-pine64-plus.dtb");
+            type = "flat_dt";
+            arch = "arm64";
+            compression = "none";
+        };
+    };
+
+    configurations {
+        default = "config-1";
+        config-1 {
+            description = "Boot xv6";
+            kernel = "kernel";
+            fdt = "fdt";
+        };
+    };
+};

@@ -8,6 +8,9 @@ bin/
 *.d
 *.elf
 *.img
+xv6.bin
+xv6.itb
+u-boot-spl.lds
 
 boot/*
 
