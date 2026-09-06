@@ -3,13 +3,12 @@
 
 int panicked;
 
-void console_init()
+void console_init(void)
 {
     uart_init();
 }
 
-static void
-printint(int64_t x, int base, int sign)
+static void printint(int64_t x, int base, int sign)
 {
     static char digit[] = "0123456789abcdef";
     static char buf[64];
@@ -28,8 +27,7 @@ printint(int64_t x, int base, int sign)
     while (i--) uart_putchar(buf[i]);
 }
 
-void
-vprintfmt(void (*putch)(int), const char *fmt, va_list ap)
+void vprintfmt(void (*putch)(int), const char *fmt, va_list ap)
 {
     int i, c;
     char *s;
@@ -84,8 +82,7 @@ vprintfmt(void (*putch)(int), const char *fmt, va_list ap)
 }
 
 /* Print to the console. */
-void
-cprintf(const char *fmt, ...)
+void cprintf(const char *fmt, ...)
 {
     va_list ap;
 
@@ -94,8 +91,7 @@ cprintf(const char *fmt, ...)
     va_end(ap);
 }
 
-void
-panic(const char *fmt, ...)
+void panic(const char *fmt, ...)
 {
     va_list ap;
 

@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <console.h>
+#include <kalloc.h>
 
 void main(void)
 {
@@ -21,7 +22,10 @@ void main(void)
     memset(edata, 0, end - edata);
 
     console_init();
-    cprintf("hello, world\n");
+    alloc_init();
+    cprintf("Allocator: Init success.\n");
+    check_free_list();
+    cprintf("check_free_list ok.\n");
 
     while (1) ;
 }

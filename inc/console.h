@@ -3,7 +3,7 @@
 
 #include <types.h>
 
-void console_init();
+void console_init(void);
 void cprintf(const char *fmt, ...);
 void panic(const char *fmt, ...);
 

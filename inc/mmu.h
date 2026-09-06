@@ -5,7 +5,29 @@
  * See Chapter 12 of ARM Cortex-A Series Programmer's Guide for ARMv8-A
  * and Chapter D5 of Arm Architecture Reference Manual Armv8, for Armv8-A architecture profile.
  */
+
+/*
+ * A virtual address 'la' has a four-part structure as follows:
+ * +-----9-----+-----9-----+-----9-----+-----9-----+---------12---------+
+ * |  Level 0  |  Level 1  |  Level 2  |  Level 3  | Offset within Page |
+ * |   Index   |   Index   |   Index   |   Index   |                    |
+ * +-----------+-----------+-----------+-----------+--------------------+
+ *  \PTX(va, 0)/\PTX(va, 1)/\PTX(va, 2)/\PTX(va, 3)/
+ */
+
 #define PGSIZE 4096
+#define PGSHIFT 12
+#define L0SHIFT 39
+#define L1SHIFT 30
+#define L2SHIFT 21
+#define L3SHIFT 12
+#define ENTRYSZ 512
+
+#define PTX(level, va) (((uint64_t)(va) >> (39 - 9 * level)) & 0x1FF)
+#define L0X(va) (((uint64_t)(va) >> L0SHIFT) & 0x1FF)
+#define L1X(va) (((uint64_t)(va) >> L1SHIFT) & 0x1FF)
+#define L2X(va) (((uint64_t)(va) >> L2SHIFT) & 0x1FF)
+#define L3X(va) (((uint64_t)(va) >> L3SHIFT) & 0x1FF)
 
 #define PGROUNDUP(sz)   (((sz)+PGSIZE-1) & ~(PGSIZE-1))
 #define PGROUNDDOWN(a)  (((a)) & ~(PGSIZE-1))
@@ -24,7 +46,7 @@
                                 (MT_NORMAL_NC_FLAGS << (8 * MT_NORMAL_NC)))
 
 /* PTE flags */
-#define PTE_VALID       0x1
+#define PTE_P           0x1
 
 #define PTE_TABLE       0x3         /* Table in level 0/1/2 */
 #define PTE_BLOCK       0x1         /* Block in level 1/2 */
