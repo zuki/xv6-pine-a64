@@ -70,7 +70,7 @@ static int map_region(uint64_t *pgdir, void *va, uint64_t size, uint64_t pa, int
             return 1;
         }
         if (*pte & PTE_P)
-            panic("remap");
+            panic(__FILE__, __LINE__, "remap");
         *pte = pa | perm | PTE_P | PTE_TABLE | (MT_NORMAL << 2) | PTE_AF | PTE_SH;
     }
 
@@ -88,7 +88,7 @@ void vm_free(uint64_t *pgdir, int level)
     if (!pgdir || level < 0 || level > 3)
         return;
     if (PTE_FLAGS(pgdir))
-        panic("vm_free: invalid pgdir\n");
+        panic(__FILE__, __LINE__, "vm_free: invalid pgdir\n");
     if (level == 0) {
         kfree((char *)pgdir);
         return;

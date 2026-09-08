@@ -1,10 +1,17 @@
 #include <types.h>
+#include <arm.h>
+#include <console.h>
+#include <spinlock.h>
 #include <uart.h>
 
-int panicked;
+struct serial_channel g_channel;
+
+#define C(x)  ((x)-'@')         // Control-x
+#define BACKSPACE 0x100
 
 void console_init(void)
 {
+    initlock(&g_channel.lock, "console");
     uart_init();
 }
 
@@ -86,21 +93,33 @@ void cprintf(const char *fmt, ...)
 {
     va_list ap;
 
+    acquire(&g_channel.lock);
+    va_start(ap, fmt);
+    vprintfmt(uart_putchar, fmt, ap);
+    va_end(ap);
+    release(&g_channel.lock);
+}
+
+void cprintf1(const char *fmt, ...)
+{
+    va_list ap;
     va_start(ap, fmt);
     vprintfmt(uart_putchar, fmt, ap);
     va_end(ap);
 }
 
-void panic(const char *fmt, ...)
+void panic(const char *f, int line, const char *fmt, ...)
 {
     va_list ap;
 
+    acquire(&g_channel.lock);
     va_start(ap, fmt);
     vprintfmt(uart_putchar, fmt, ap);
+    cprintf1("\n");
     va_end(ap);
-
-    cprintf("%s:%d: kernel panic.\n", __FILE__, __LINE__);
-    panicked = 1;
+    cprintf1("%s:%d: kernel panic at cpu %d\n.", f, line, cpuid());
+    release(&g_channel.lock);
     while (1)
         ;
 }
+

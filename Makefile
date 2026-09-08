@@ -1,5 +1,5 @@
-CROSS := /opt/homebrew/bin/aarch64-elf
-#CROSS := /Applications/ArmGNUToolchain/14.3.rel1/aarch64-none-elf/bin/aarch64-none-elf
+#CROSS := /opt/homebrew/bin/aarch64-elf
+CROSS := /Applications/ArmGNUToolchain/14.3.rel1/aarch64-none-elf/bin/aarch64-none-elf
 CC := $(CROSS)-gcc
 LD := $(CROSS)-ld
 OBJDUMP := $(CROSS)-objdump
@@ -23,13 +23,16 @@ OBJCOPY := $(CROSS)-objcopy
 # -MMD -MP:
 #     generate .d files
 
-CFLAGS := -Wall -O0 \
+CFLAGS := -Wall -O2 -std=gnu11 \
           -fno-pie -fno-pic -fno-stack-protector \
-          -static -fno-builtin -nostdlib -ffreestanding -nostartfiles \
+	  -fno-zero-initialized-in-bss \
+          -static -fno-builtin -nostdlib -nostdinc -ffreestanding -nostartfiles \
           -mgeneral-regs-only \
-	      -MMD -MP
+	  -MMD -MP -Iinc -DLOG_DEBUG
 
-CFLAGS += -Iinc
+CFLAGS += -mlittle-endian -mcmodel=small -mno-outline-atomics
+CFLAGS += -mcpu=cortex-a53 -mtune=cortex-a53
+
 SRC_DIRS := kern
 BUILD_DIR = obj
 

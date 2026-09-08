@@ -29,10 +29,19 @@
 #define SPSR_EL3_VALUE       (SPSR_MASK_ALL | SPSR_EL2h)
 #define SPSR_VALUE           (SPSR_MASK_ALL | SPSR_EL1h)
 
-/* ESR_EL1, Exception Syndrome Register (EL1) */
-#define ESR_ELx_EC_SHIFT        26
-#define ESR_ELx_EC_SVC64        0x15
-#define ESR_ELx_EC_IABT_LOW     0x20
-#define ESR_ELx_EC_DABT_LOW     0x24
+/* EC (Exception Class): ESR_EL1[31:26] */
+#define EC_SHIFT                    26
+#define EC_UNKNOWN                  0x00
+#define EC_SVC64                    0x15
+#define EC_IABORT                   0x20
+#define EC_IABORT2                  0x21
+#define EC_ALIGNMENT                0x22
+#define EC_DABORT                   0x24
+#define EC_DABORT2                  0x25
+
+/* ISS (nstruction Specific Syndrome): ESR_EL1[24:0] */
+#define ISS_MASK                    0x1FFFFFF
+/* IR (Instruction Length): ESR_EL1[25] */
+#define IL_MASK                     (1 << 25)
 
 #endif

@@ -1,8 +1,13 @@
 #include <types.h>
-
+#include <arm.h>
 #include <string.h>
 #include <console.h>
 #include <kalloc.h>
+#include <irq.h>
+#include <timer.h>
+#include <trap.h>
+
+extern void *vectors;
 
 void main(void)
 {
@@ -23,9 +28,9 @@ void main(void)
 
     console_init();
     alloc_init();
-    cprintf("Allocator: Init success.\n");
-    check_free_list();
-    cprintf("check_free_list ok.\n");
+    irq_init();
+    load_vbar_el1(vectors);
+    timer_init();
 
     while (1) ;
 }
