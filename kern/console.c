@@ -65,6 +65,8 @@ void vprintfmt(void (*putch)(int), const char *fmt, va_list ap)
             else printint(va_arg(ap, int), 16, 0);
             break;
         case 'p':
+            putch('0');
+            putch('x');
             printint((int64_t)va_arg(ap, void *), 16, 0);
             break;
         case 'c':
@@ -107,19 +109,3 @@ void cprintf1(const char *fmt, ...)
     vprintfmt(uart_putchar, fmt, ap);
     va_end(ap);
 }
-
-void panic(const char *f, int line, const char *fmt, ...)
-{
-    va_list ap;
-
-    acquire(&g_channel.lock);
-    va_start(ap, fmt);
-    vprintfmt(uart_putchar, fmt, ap);
-    cprintf1("\n");
-    va_end(ap);
-    cprintf1("%s:%d: kernel panic at cpu %d\n.", f, line, cpuid());
-    release(&g_channel.lock);
-    while (1)
-        ;
-}
-

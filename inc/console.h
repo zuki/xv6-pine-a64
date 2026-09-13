@@ -4,6 +4,7 @@
 #include <types.h>
 #include <arm.h>
 #include <spinlock.h>
+#include <string.h>
 
 #define INPUT_BUF   128
 
@@ -22,12 +23,11 @@ extern struct serial_channel g_channel;
 void console_init(void);
 void cprintf1(const char *fmt, ...);
 void cprintf(const char *fmt, ...);
-void panic(const char *f, int line, const char *fmt, ...);
 
 #define assert(x)                                                   \
 ({                                                                  \
     if (!(x)) {                                                     \
-        panic(__FILE__, __LINE__, "%s:%d: assertion failed.\n", __FILE__, __LINE__);    \
+        panic("%s:%d: assertion failed.\n", __FILE__, __LINE__);    \
     }                                                               \
 })
 
@@ -35,20 +35,25 @@ void panic(const char *f, int line, const char *fmt, ...);
 ({                                                                  \
     if (!(x)) {                                                     \
         cprintf("%s:%d: assertion failed.\n", __FILE__, __LINE__);  \
-        panic(__FILE__, __LINE__, __VA_ARGS__);                                         \
+        panic(__VA_ARGS__);                                         \
     }                                                               \
 })
 
 #define LOG1(_level, ...)                       \
 ({                                              \
     acquire(&g_channel.lock);                   \
-    cprintf1("[%d]%s: ", cpuid(), __func__);    \
+    if (!strcmp(_level, "PANIC"))               \
+        cprintf1("PANIC");                      \
+    cprintf1("[%d] %s#%d ", cpuid(), __func__, __LINE__);    \
     cprintf1(__VA_ARGS__);                      \
     cprintf1("\n");                             \
     release(&g_channel.lock);                   \
+    if (!strcmp(_level, "PANIC"))               \
+        while(1);                               \
 })
 
 #ifdef LOG_ERROR
+#define panic(...)  LOG1("PANIC", __VA_ARGS__);
 #define error(...)  LOG1("ERROR", __VA_ARGS__);
 #define warn(...)
 #define info(...)
@@ -56,6 +61,7 @@ void panic(const char *f, int line, const char *fmt, ...);
 #define trace(...)
 
 #elif defined(LOG_WARN)
+#define panic(...)  LOG1("PANIC", __VA_ARGS__);
 #define error(...)  LOG1("ERROR", __VA_ARGS__);
 #define warn(...)   LOG1("WARN ", __VA_ARGS__);
 #define info(...)
@@ -63,6 +69,7 @@ void panic(const char *f, int line, const char *fmt, ...);
 #define trace(...)
 
 #elif defined(LOG_INFO)
+#define panic(...)  LOG1("PANIC", __VA_ARGS__);
 #define error(...)  LOG1("ERROR", __VA_ARGS__);
 #define warn(...)   LOG1("WARN ", __VA_ARGS__);
 #define info(...)   LOG1("INFO ", __VA_ARGS__);
@@ -70,6 +77,7 @@ void panic(const char *f, int line, const char *fmt, ...);
 #define trace(...)
 
 #elif defined(LOG_DEBUG)
+#define panic(...)  LOG1("PANIC", __VA_ARGS__);
 #define error(...)  LOG1("ERROR", __VA_ARGS__);
 #define warn(...)   LOG1("WARN ", __VA_ARGS__);
 #define info(...)   LOG1("INFO ", __VA_ARGS__);
@@ -77,6 +85,7 @@ void panic(const char *f, int line, const char *fmt, ...);
 #define trace(...)
 
 #elif defined(LOG_TRACE)
+#define panic(...)  LOG1("PANIC", __VA_ARGS__);
 #define error(...)  LOG1("ERROR", __VA_ARGS__);
 #define warn(...)   LOG1("WARN ", __VA_ARGS__);
 #define info(...)   LOG1("INFO ", __VA_ARGS__);
@@ -85,6 +94,7 @@ void panic(const char *f, int line, const char *fmt, ...);
 
 #else
 /* Default to none. */
+#define panic(...)  LOG1("PANIC", __VA_ARGS__);
 #define error(...)
 #define warn(...)
 #define info(...)

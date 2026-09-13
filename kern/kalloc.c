@@ -34,7 +34,7 @@ void kfree(char *v)
     struct run *r;
 
     if ((uint64_t)v % PGSIZE || v < end || V2P(v) >= PHYSTOP)
-        panic(__FILE__, __LINE__, "kfree");
+        panic("kfree");
 
     /* Fill with junk to catch dangling refs. */
     //memset(v, 1, PGSIZE);     // ここでメモリクリアすると非常に時間がかかるのでしない
@@ -78,7 +78,7 @@ void check_free_list(void)
 {
     struct run *p;
     if (!kmem.free_list)
-        panic(__FILE__, __LINE__, "'kmem.free_list' is a null pointer!");
+        panic("'kmem.free_list' is a null pointer!");
 
     for (p = kmem.free_list; p; p = p->next) {
         assert((void *)p > (void *)end);
