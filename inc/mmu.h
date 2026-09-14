@@ -65,9 +65,10 @@
 #define PTE_PXN         (1UL<<53)   /* EL1以上での実行不可 */
 #define PTE_UXN         (1UL<<54)   /* EL0での実行不可 */
 
-#define PTE_NORMAL_NC   ((MT_NORMAL_NC << 2) | AF_USED | SH_OUTER)
-#define PTE_NORMAL      ((MT_NORMAL << 2) | AF_USED | SH_OUTER)
-// #define PTE_NORMAL      ((MT_NORMAL << 2) | AF_USED | SH_INNER)
+// #define PTE_NORMAL_NC   ((MT_NORMAL_NC << 2) | AF_USED | SH_OUTER)
+// #define PTE_NORMAL      ((MT_NORMAL << 2) | AF_USED | SH_OUTER)
+#define PTE_NORMAL_NC   ((MT_NORMAL_NC << 2) | AF_USED | SH_INNER)
+#define PTE_NORMAL      ((MT_NORMAL << 2) | AF_USED | SH_INNER)
 #define PTE_DEVICE      ((MT_DEVICE_nGnRnE << 2) | AF_USED)
 
 /* 1GB/2MB block for kernel, and 4KB page for user. */

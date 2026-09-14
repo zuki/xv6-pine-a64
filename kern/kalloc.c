@@ -25,7 +25,7 @@ void alloc_init(void)
 {
     initlock(&kmem.lock, "kmem");
     free_range(end, P2V(PHYSTOP));
-    info("alloc_init ok");
+    //info("alloc_init ok");
 }
 
 /* Free the page of physical memory pointed at by v. */
@@ -51,7 +51,7 @@ void free_range(void *vstart, void *vend)
     char *p;
 
     p = ROUNDUP((char *)vstart, PGSIZE);
-    cprintf("free_range: start: %p, end: %p\n", p, vend);
+    //cprintf("free_range: start: %p, end: %p\n", p, vend);
     for (; p + PGSIZE <= (char *)vend; p += PGSIZE) {
         kfree(p);
     }

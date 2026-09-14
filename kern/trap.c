@@ -10,9 +10,17 @@
 #include <clock.h>
 #include <timer.h>
 
+void trap_init(void)
+{
+    extern char vectors[];
+    load_vbar_el1(vectors);
+    lesr(0);
+    //info("trap_init ok");
+}
+
 void trap(struct trapframe *tf)
 {
-
+    //debug("trap");
     uint64_t esr = resr();
     uint64_t far = rfar();
     uint64_t elr = relr();
@@ -27,7 +35,7 @@ void trap(struct trapframe *tf)
     switch (ec) {
     case EC_UNKNOWN:
         if (il) {
-            trace("IL bit on");
+            panic("EC_UNKONW: IL bit on");
         } else {
             irq_handler(/*user_mode(tf)*/);
         }
@@ -74,12 +82,14 @@ void trap(struct trapframe *tf)
         break;
     case EC_ALIGNMENT:  // 0x22 = 34
         error("SP alignment fault exception at elr: 0x%llx with far: 0x%llx", elr, far);
+        panic("abort");
         //exit(1);
         break;
     default:
         debug("unknown trap code: %d at elr: 0x%llx with far: 0x%llx", ec, elr, far);
         //dump_tf(tf);
         //exit(1);
+        panic("unknown");
     }
 
 }

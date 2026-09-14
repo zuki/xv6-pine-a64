@@ -118,4 +118,50 @@ static inline uint64_t rfar()
     return r;
 }
 
+/* Unmask DAIF to start interrupt. */
+static inline void
+sti()
+{
+    asm volatile("msr daif, %[x]" : : [x]"r"(0));
+}
+
+/* Mask DAIF to close interrupt. */
+static inline void
+cli()
+{
+    asm volatile("msr daif, %[x]" : : [x]"r"(0xF << 6));
+}
+
+static inline void
+enable_irq(void)
+{
+    __asm__ __volatile__ ("msr DAIFClr, #2");
+}
+
+static inline void
+disable_irq(void)
+{
+    __asm__ __volatile__ ("msr DAIFSet, #2");
+}
+
+static inline void
+enable_fiq(void)
+{
+    __asm__ __volatile__ ("msr DAIFClr, #1");
+}
+
+static inline void
+disable_fiq(void)
+{
+    __asm__ __volatile__ ("msr DAIFSet, #1");
+}
+
+static inline int
+irq_enabled(void)
+{
+    uint64_t r;
+    __asm__ __volatile__("mrs %[x], daif" : [x]"=r"(r));
+    return (r & 0x80) == 0;
+}
+
 #endif

@@ -20,7 +20,15 @@ uint64_t kpte1[512] = {
     0x1800000 | PTE_KDEV,
     0x1a00000 | PTE_KDEV,
     0x1c00000 | PTE_KDEV,
-    0x1e00000 | PTE_KDEV
+    0x1e00000 | PTE_KDEV,
+    0x2000000 | PTE_KDEV,
+    0x2200000 | PTE_KDEV,
+    0x2400000 | PTE_KDEV,
+    0x2600000 | PTE_KDEV,
+    0x2800000 | PTE_KDEV,
+    0x2a00000 | PTE_KDEV,
+    0x2c00000 | PTE_KDEV,
+    0x2e00000 | PTE_KDEV,
 };
 
 uint64_t kpte2[512] = {

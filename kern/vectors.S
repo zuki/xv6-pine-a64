@@ -14,20 +14,25 @@ el1_sp0:
     verror(2)     // fiq
     verror(3)     // serror
 
+.align 7
 el1_spx:
-    verror(4)
-    verror(5)
+    ventry
+    ventry
     verror(6)
     verror(7)
 
+.align 7
 el0_aarch64:
     ventry        // syncronous : syscall
     ventry        // irq  : uart, timer, etc
     verror(10)
     verror(11)
 
+.align 7
 el0_aarch32:
     verror(12)
     verror(13)
     verror(14)
     verror(15)
+
+

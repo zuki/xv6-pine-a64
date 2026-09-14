@@ -39,3 +39,5 @@ firmware.o
 log.txt
 
 docs/book
+.config
+inc/sunxi/

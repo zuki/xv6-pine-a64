@@ -21,6 +21,7 @@ struct serial_channel {
 extern struct serial_channel g_channel;
 
 void console_init(void);
+void console_intr(void *_p);
 void cprintf1(const char *fmt, ...);
 void cprintf(const char *fmt, ...);
 

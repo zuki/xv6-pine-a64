@@ -2,7 +2,7 @@
 .global alltraps
 alltraps:
     /* store struct trapframce */
-    str     q0, [sp, #-16]!
+    //str     q0, [sp, #-16]!
 
     stp     x30, xzr, [sp, #-16]!
     stp     x28, x29, [sp, #-16]!
@@ -62,7 +62,7 @@ trapret:
     ldp     x28, x29, [sp], #16
     ldp     x30, xzr, [sp], #16
 
-    ldr     q0, [sp], #16
+    //ldr     q0, [sp], #16
 
     ic      iallu
     dsb     sy

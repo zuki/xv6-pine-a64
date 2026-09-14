@@ -5,9 +5,10 @@
 #include <kalloc.h>
 #include <irq.h>
 #include <timer.h>
+#include <arm_timer.h>
+#include <clock.h>
 #include <trap.h>
-
-extern void *vectors;
+#include <peripherals/uart.h>
 
 void main(void)
 {
@@ -26,11 +27,37 @@ void main(void)
     extern char edata[], end[];
     memset(edata, 0, end - edata);
 
-    console_init();
     alloc_init();
+    trap_init();
     irq_init();
-    load_vbar_el1(vectors);
+    console_init();
+    clock_init();
     timer_init();
+    //enable_irq();
+    sti();
+
+#if 0
+    // 同期エラーを発生させてtrapが発生するかチェック -> voctorsのメモリ設定の修正で発生
+    asm volatile("brk #0" : : : "memory");
+    // timer値がカウントダウンするかチェック -> する
+    delay(1000);
+    debug("timer0 count: 0x%x", get32(TMR0_CUR_VALUE_REG));
+    debug("timer1 count: 0x%x", get32(TMR1_CUR_VALUE_REG));
+    // 割り込みが通知されるかチェック -> されない
+    debug("ISPENDR[1]: 0x%x", get32(GICD_ICPENDRn + 4));
+    delay(12000000);
+    // timerで保留フラグが立つかチェック -> 立つ
+    debug("timer pending: 0x%x", get32(TMR_IRQ_STA_REG));
+    // SGI割り込みを自分自身に送り割り込みが発生するかチェック -> 発生
+    irq_send_sgi_to_me(1);
+    // カウンタ周波数を取得 -> 24MHz
+    debug("cntfrq_el0: 0x%x", get_cntfrq_el0());
+    // uartに直接書き込み、割り込みが発生するか確認　-> 発生
+    put32(UART_THR(0), 0x23);
+    delay(100);
+    put32(UART_THR(0), 0x23);
+
+#endif
 
     while (1) ;
 }

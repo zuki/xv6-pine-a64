@@ -1,18 +1,92 @@
 #include <types.h>
 #include <arm.h>
 #include <console.h>
+#include <irq.h>
 #include <spinlock.h>
 #include <uart.h>
 
 struct serial_channel g_channel;
+static int panicked = -1;
 
 #define C(x)  ((x)-'@')         // Control-x
 #define BACKSPACE 0x100
+
+static void consputc(int c)
+{
+    if (c == BACKSPACE) {
+        uart_putchar('\b');
+        uart_putchar(' ');
+        uart_putchar('\b');
+    } else {
+        uart_putchar(c);
+    }
+}
+
+static void console_intr1(char (*getc)())
+{
+    int c; /*, prof = 0; */
+
+    acquire(&g_channel.lock);
+    if (panicked >= 0) {
+        release(&g_channel.lock);
+        while (1) ;
+    }
+
+    while ((c = getc()) >= 0) {
+        switch (c) {
+        //case C('P'):           // Process listing.
+        //    prof = 1;
+        //    break;
+        case C('U'):           // Kill line.
+            while (g_channel.e != g_channel.w
+                   && g_channel.buf[(g_channel.e - 1) % INPUT_BUF] != '\n') {
+                g_channel.e--;
+                consputc(BACKSPACE);
+            }
+            break;
+        case C('H'):
+        case '\x7f':           // Backspace
+            if (g_channel.e != g_channel.w) {
+                g_channel.e--;
+                consputc(BACKSPACE);
+            }
+            break;
+        default:
+            if (c != 0 && g_channel.e - g_channel.r < INPUT_BUF) {
+                c = (c == '\r') ? '\n' : c;
+                g_channel.buf[g_channel.e++ % INPUT_BUF] = c;
+                consputc(c);
+                if (c == '\n' || c == C('D')
+                    || g_channel.e == g_channel.r + INPUT_BUF) {
+                    g_channel.w = g_channel.e;
+                    //wakeup(&g_channel.r);
+                }
+            }
+            break;
+        }
+    }
+    release(&g_channel.lock);
+
+#if 0
+    if (prof) {
+        //mm_dump();
+        procdump();
+    }
+#endif
+}
+
+void console_intr(void *_p)
+{
+    console_intr1(uart_getchar);
+}
 
 void console_init(void)
 {
     initlock(&g_channel.lock, "console");
     uart_init();
+
+    irq_register(IRQ_UART0, console_intr, 0);
+    irq_enable(IRQ_UART0);
 }
 
 static void printint(int64_t x, int base, int sign)

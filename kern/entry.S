@@ -81,6 +81,10 @@ el1:
     msr     sctlr_el1, x0
     isb
 
+    //adr     x1, vectors
+    //msr     vbar_el1, x1
+    //isb
+
     /*
      * Jump to C code, should not return.
      * Why not directly run `b main`?

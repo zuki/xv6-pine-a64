@@ -4,6 +4,7 @@
 #include <arm.h>
 #include <peripherals/uart.h>
 #include <peripherals/gpio.h>
+#include <irq.h>
 
 void uart_putchar(int c)
 {
@@ -21,8 +22,10 @@ char uart_getchar()
 
 void uart_init()
 {
-
     uint32_t selector;
+
+    put32(BUS_CLK_GATING_REG3, get32(BUS_CLK_GATING_REG3) | BUS_CLK_GATING_REG0_UART0_GATING);
+    put32(BUS_SOFT_RST_REG4, get32(BUS_SOFT_RST_REG4) | BUS_SOFT_RST0_UART0_RST);
 
     selector = get32(Pn_CFG1(1));
     selector &= ~(7<<4);
@@ -30,7 +33,6 @@ void uart_init()
     selector &= ~(7<<0);
     selector |= 4<<0;
     put32(Pn_CFG1(1), selector);
-
 
     while (get32(UART_USR(0)) & UART_USR_BUSY)
         ;
@@ -46,6 +48,8 @@ void uart_init()
     selector &= ~0x8f;  // clear DLAB and bits:3-0
     selector |= (UART_LCR_PEN | UART_LCR_STOP | UART_LCR_DLS);  // 8N1
     put32(UART_LCR(0), selector);
+
+    put32(UART_IER(0), UART_ETBEI | UART_ERBFI);
 
     // FIFOは未設定
 }
