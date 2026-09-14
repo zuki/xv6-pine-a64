@@ -22,3 +22,13 @@ free_range: start: 42009000, end: 80000000
 [0]irq_init: irq_init ok
 [0]timer_init: timer_init ok
 ```
+
+## 割り込みが発火していないことが判明
+
+- trap_init()の`extern void *vectors;`が原因でvectorsのアドレスが
+  正しくvbar_el1にセットされなかったため、trap()自体実行されていなかった。
+- Timer0/Timer1割り込みがGICv2経由では発火しないことがわかった。
+- SPI割り込みであるUART0割り込み(GIC_SPI(0))は発火したので、
+  すべてのSPI割り込みが発火しないわけではないことが確認された。
+- ARM仮想タイマー（GIC_PPI(11)=27）ははっかしたのでこれを計時に使用することにした。
+
