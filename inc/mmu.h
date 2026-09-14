@@ -99,7 +99,7 @@
 
 #define TCR_VALUE       (TCR_T0SZ           | TCR_T1SZ      |   \
                          TCR_TG0_4K         | TCR_TG1_4K    |   \
-                         TCR_SH0_OUTER      | TCR_SH1_OUTER |   \
+                         TCR_SH0_INNER      | TCR_SH1_INNER |   \
                          TCR_ORGN0_IRGN0    | TCR_ORGN1_IRGN1)
 
 #endif
