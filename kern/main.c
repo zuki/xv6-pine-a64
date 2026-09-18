@@ -34,6 +34,7 @@ void main(void)
     trap_init();        // ap
     clock_init();
     timer_init();       // ap
+    rtc_init();
     enable_irq();
     //sti();
 
