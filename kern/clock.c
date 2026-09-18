@@ -2,19 +2,35 @@
 
 #include <arm.h>
 #include <irq.h>
-#include <timer.h>
+#include <arm_timer.h>
 #include <console.h>
 
 // Timer 0をクロックタイマーとして使用する
-static uint64_t jiffies = 0, jiffies2 = 0;
+static uint64_t jiffies = 0;
 
 void clock_init(void)
 {
-    arm_timer_init();
-    irq_register(GIC_PPI(11), arm_timer_intr, 0);
+    arm_vtimer_init();
+    irq_register(GIC_PPI(11), clock_intr, 0);
     irq_enable(GIC_PPI(11));
 
+    info("clock_init ok");
+}
+
+void clock_intr(void *param)
+{
+    // pendingビットをクリア
+    arm_vtimer_reset();
+    if ((++jiffies % 100) == 0)
+        cprintf("*");
+    // 時刻更新処理
+    //update_proc_time();
+}
+
+
 #if 0
+void clock_init(void)
+{
     // Timer0は10ms毎に割り込んでtickを進める
     // Timer0/1を有効にする
     put32(TMR_IRQ_EN_REG, get32(TMR_IRQ_EN_REG) | 0x1);
@@ -33,7 +49,7 @@ void clock_init(void)
 
     irq_register(IRQ_TIMER0, clock_intr, 0);
     irq_enable(IRQ_TIMER0);
-#endif
+
 
     // Timer0は10ms毎に割り込んでtickを進める
     // 1, HSTimerを有効にする
@@ -50,9 +66,6 @@ void clock_init(void)
 
     irq_register(IRQ_HSTIMER, clock_intr, 0);
     irq_enable(IRQ_HSTIMER);
-
-    info("clock_init ok");
-}
 
 void clock_reset(void)
 {
@@ -73,13 +86,7 @@ void clock_intr(void *param)
     // 時刻更新処理
     //update_proc_time();
 }
+#endif
 
-void arm_timer_intr(void *param)
-{
-    // pendingビットをクリア
-    arm_timer_reset();
-    if ((++jiffies % 100) == 0)
-        cprintf("*");
-    // 時刻更新処理
-    //update_proc_time();
-}
+
+

@@ -44,10 +44,7 @@
 
 void timer_init(void);
 void timer_intr(void *param);
-void timer_reset(void);
-
-void arm_timer_init(void);
-void arm_timer_intr(void *param);
-void arm_timer_reset(void);
+void arm_ptimer_init(void);
+void arm_ptimer_reset(void);
 
 #endif

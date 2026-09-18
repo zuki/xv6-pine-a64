@@ -8,6 +8,7 @@
 #include <arm_timer.h>
 #include <clock.h>
 #include <trap.h>
+#include <rtc.h>
 #include <peripherals/uart.h>
 
 void main(void)
@@ -28,13 +29,13 @@ void main(void)
     memset(edata, 0, end - edata);
 
     alloc_init();
-    trap_init();
-    irq_init();
+    irq_init();         // ap
     console_init();
+    trap_init();        // ap
     clock_init();
-    timer_init();
-    //enable_irq();
-    sti();
+    timer_init();       // ap
+    enable_irq();
+    //sti();
 
 #if 0
     // 同期エラーを発生させてtrapが発生するかチェック -> voctorsのメモリ設定の修正で発生
