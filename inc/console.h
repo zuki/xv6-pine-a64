@@ -45,7 +45,7 @@ void cprintf(const char *fmt, ...);
     acquire(&g_channel.lock);                   \
     if (!strcmp(_level, "PANIC"))               \
         cprintf1("PANIC");                      \
-    cprintf1("[%d] %s#%d ", cpuid(), __func__, __LINE__);    \
+    cprintf1("[%d]%s#%d: ", cpuid(), __func__, __LINE__);    \
     cprintf1(__VA_ARGS__);                      \
     cprintf1("\n");                             \
     release(&g_channel.lock);                   \
