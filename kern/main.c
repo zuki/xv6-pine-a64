@@ -63,3 +63,9 @@ void main(void)
 
     while (1) ;
 }
+
+
+void secondary_main(int cpuid)
+{
+
+}
