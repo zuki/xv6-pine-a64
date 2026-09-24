@@ -10,6 +10,7 @@
 #include <clock.h>
 #include <timer.h>
 
+#if 0
 void trap_init(void)
 {
     extern char vectors[];
@@ -17,6 +18,7 @@ void trap_init(void)
     lesr(0);
     //info("trap_init ok");
 }
+#endif
 
 void trap(struct trapframe *tf)
 {

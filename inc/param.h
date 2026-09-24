@@ -1,3 +1,5 @@
+#ifndef H_PARAM_H
+#define H_PARAM_H
 // カーネル(c, asm)とmkfsの両者でincludeされる
 
 // -------------- 構成 -------------------------- //
@@ -58,14 +60,4 @@
 #define VA2PA(x)    ((unsigned long)x - VA_START)           // カーネル仮想アドレスから物理アドレスに変換
 #define PA2VA(x)    ((void *)((unsigned long)x + VA_START)) // 物理アドレスからカーネル仮想アドレスに変換
 
-#ifndef __ASSEMBLER__
-// keep xv6 code happy. TODO: separate them out...
-typedef unsigned int   uint;
-typedef unsigned short ushort;
-typedef unsigned char  uchar;
-
-typedef unsigned char uint8;
-typedef unsigned short uint16;
-typedef unsigned int  uint32;
-typedef unsigned long uint64;
 #endif

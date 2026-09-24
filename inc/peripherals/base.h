@@ -3,6 +3,6 @@
 
 #include <memlayout.h>
 
-#define MMIO_BASE KERNBASE
+#define MMIO_BASE KERN_BASE
 
 #endif

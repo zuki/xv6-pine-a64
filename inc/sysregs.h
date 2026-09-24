@@ -12,6 +12,14 @@
 
 #define SCTLR_VALUE_MMU_DISABLED    (SCTLR_RESERVED | SCTLR_EE_LITTLE_ENDIAN | SCTLR_I_CACHE_DISABLED | SCTLR_D_CACHE_DISABLED | SCTLR_MMU_DISABLED)
 
+#define SCTLR_VALUE ( SCTLR_RESERVED |  /* mandatory reserved bits, cf the manual */\
+                      (1 << 12)  |      /* I, 命令キャッシュを有効化. EL0とEL1における有効化ビット */\
+                      (1 << 3)   |      /* SA, スタックアライメントチェックを有効化 */\
+                      (1 << 4)   |      /* SA0, EL0でスタックアライメントチェックを有効化 */\
+                      (1 << 2)   |      /* C, データキャッシュを有効化. EL0とEL1における有効化ビット*/\
+                      (1 << 0) )        /* set M, MMUを有効化 */
+
+
 /* HCR_EL2, Hypervisor Configuration Register (EL2) */
 #define HCR_RW               (1 << 31)
 #define HCR_VALUE            HCR_RW

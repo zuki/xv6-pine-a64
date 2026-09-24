@@ -6,7 +6,7 @@
 #include <kalloc.h>
 #include <spinlock.h>
 
-extern char end[];
+extern char kernel_end[];
 
 /*
  * Free page's list element struct.
@@ -24,7 +24,7 @@ struct {
 void alloc_init(void)
 {
     initlock(&kmem.lock, "kmem");
-    free_range(end, P2V(PHYSTOP));
+    free_range(kernel_end, P2V(PHYS_TOP));
     //info("alloc_init ok");
 }
 
@@ -33,7 +33,7 @@ void kfree(char *v)
 {
     struct run *r;
 
-    if ((uint64_t)v % PGSIZE || v < end || V2P(v) >= PHYSTOP)
+    if ((uint64_t)v % PGSIZE || v < kernel_end || V2P(v) >= PHYS_TOP)
         panic("kfree");
 
     /* Fill with junk to catch dangling refs. */
@@ -81,7 +81,7 @@ void check_free_list(void)
         panic("'kmem.free_list' is a null pointer!");
 
     for (p = kmem.free_list; p; p = p->next) {
-        assert((void *)p > (void *)end);
+        assert((void *)p > (void *)kernel_end);
     }
     info("check_free_list ok");
 }

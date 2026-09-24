@@ -8,35 +8,100 @@
 #include <arm_timer.h>
 #include <clock.h>
 #include <trap.h>
+#include <param.h>
+#include <memlayout.h>
+#include <mmu.h>
 #include <rtc.h>
 #include <peripherals/uart.h>
+#include <utils.h>
+
+extern uint64_t spin_core0;
+extern uint64_t mp_start;
+
+unsigned long *core_flags = (unsigned long *)&spin_core0;
+
+#define PSCI_0_2_FN64_CPU_ON  0xC4000003
+
+// PSCIを呼び出すアセンブリラッパー
+static int psci_cpu_on(unsigned long cpuid, unsigned long entry_point, unsigned long context) {
+    register unsigned long r0 asm("x0") = PSCI_0_2_FN64_CPU_ON;
+    register unsigned long r1 asm("x1") = cpuid;
+    register unsigned long r2 asm("x2") = entry_point;
+    register unsigned long r3 asm("x3") = context;
+
+    asm volatile(
+        "smc #0\n"
+        : "+r"(r0)
+        : "r"(r1), "r"(r2), "r"(r3)
+        : "memory"
+    );
+    return r0; // 0が返ってくれば成功
+}
+
+
+static void start_secondary_cores(void)
+{
+    int ng = 0;
+    for (int i = 1; i < NCPU; i++) {
+        core_flags[i] = 0;
+        __asm_flush_dcache_line(&core_flags[i]);
+        //asm volatile("dc cvac, %0" :: "r"(&core_flags[i]));
+        //asm volatile("dsb sy");
+
+        // ATF(PSCI)に対して、「コアi を 物理アドレス _start から起動せよ」と命令する
+        // ※ entry_point にはAPが最初に実行すべき物理アドレス（_start）を指定します
+        extern void _start(void);
+        int ret = psci_cpu_on(i, (unsigned long)&_start, 0);
+
+        if (ret != 0) {
+            error("PSCI CPU_ON failed for core %d, ret=%d", i, ret);
+            ng++;
+            continue;
+        }
+
+        int timeout = 100;
+        while (1) {
+            __asm_invalidate_dcache_line(&core_flags[i]);
+            //asm volatile("dc ivac, %0" :: "r"(&core_flags[i]));
+            //asm volatile("dsb sy");
+
+            if (core_flags[i] == 1) break;
+
+            if (timeout-- <= 0) {
+                error("failed to start core %d", i);
+                ng++;
+                break;
+            }
+            delayus(1000);
+        }
+    }
+    if (ng) {
+        info("start cores ng");
+    } else {
+        info("start cores ok");
+    }
+}
 
 void main(void)
 {
+#if 0
     // 1文字デバッグ出力
-/*
     *(volatile uint32_t *)0x01c28000 = 'M';
-
     // メモリバリア（C言語のインラインアセンブラ）
     asm volatile("dsb sy" : : : "memory");
     asm volatile("isb" : : : "memory");
-*/
-    /*
-     * Before doing anything else, we need to ensure that all
-     * static/global variables start out zero.
-     */
-    extern char edata[], end[];
-    memset(edata, 0, end - edata);
+#endif
 
     alloc_init();
     irq_init();         // ap
     console_init();
-    trap_init();        // ap
+    //trap_init();        // ap
     clock_init();
-    timer_init();       // ap
+
     rtc_init();
     enable_irq();
-    //sti();
+    start_secondary_cores();
+    timer_init();       // ap
 
 #if 0
     // 同期エラーを発生させてtrapが発生するかチェック -> voctorsのメモリ設定の修正で発生
@@ -65,7 +130,16 @@ void main(void)
 }
 
 
-void secondary_main(int cpuid)
+void secondary_main(int core)
 {
+    core_flags[core] = 1;
+    __asm_flush_dcache_line(&core_flags[core]);
+    //asm volatile("dc cvac, %0" :: "r"(&core_flags[core]));
+    //asm volatile("dsb sy");
+
+    info("Hello core %d", core);
+
+    while (1)
+        asm volatile("wfi");
 
 }

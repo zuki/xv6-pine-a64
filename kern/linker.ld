@@ -14,7 +14,9 @@ SECTIONS
     .rodata : { *(.rodata) }
     PROVIDE(data = .);
     .data : { *(.data) }
-    PROVIDE(edata = .);
+    . = ALIGN(0x8);
+    PROVIDE(bss_begin = .);
     .bss : { *(.bss) }
-    PROVIDE(end = .);
+    PROVIDE(bss_end = .);
+    PROVIDE(kernel_end = .);
 }

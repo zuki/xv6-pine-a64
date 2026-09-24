@@ -41,3 +41,4 @@ log.txt
 docs/book
 .config
 inc/sunxi/
+*.org

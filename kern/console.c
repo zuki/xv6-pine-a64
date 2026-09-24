@@ -87,6 +87,7 @@ void console_init(void)
 
     irq_register(IRQ_UART0, console_intr, 0);
     irq_enable(IRQ_UART0);
+    //info("console_init ok");
 }
 
 static void printint(int64_t x, int base, int sign)
