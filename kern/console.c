@@ -90,7 +90,7 @@ void console_init(void)
     //info("console_init ok");
 }
 
-static void printint(int64_t x, int base, int sign)
+static void printint(int64_t x, int base, int sign, int zero, int col)
 {
     static char digit[] = "0123456789abcdef";
     static char buf[64];
@@ -106,12 +106,20 @@ static void printint(int64_t x, int base, int sign)
         buf[i++] = digit[t % base];
     } while (t /= base);
 
+    for (; i < col; i++)
+        if (zero == 1)
+            buf[i] = '0';
+        else if (zero == -1)
+            buf[i] = ' ';
+        else
+            break;
+
     while (i--) uart_putchar(buf[i]);
 }
 
 void vprintfmt(void (*putch)(int), const char *fmt, va_list ap)
 {
-    int i, c;
+    int i, c, j;
     char *s;
     for (i = 0; (c = fmt[i] & 0xff) != 0; i++) {
         if (c != '%') {
@@ -119,7 +127,19 @@ void vprintfmt(void (*putch)(int), const char *fmt, va_list ap)
             continue;
         }
 
-        int l = 0;
+        int l = 0, n = 0, z = 0;
+        if (fmt[i+1] == '0') {
+            z = 1;
+            i++;
+        } else if (fmt[i+1] == '-') {
+            z = -1;
+            i++;
+        }
+
+        for (; fmt[i+1] >= '0' && fmt[i+1] <= '9'; i++) {
+            n = n * 10 + (fmt[i+1] - '0') % 10;
+        }
+
         for (; fmt[i+1] == 'l'; i++)
             l++;
 
@@ -128,30 +148,41 @@ void vprintfmt(void (*putch)(int), const char *fmt, va_list ap)
 
         switch (c) {
         case 'u':
-            if (l == 2) printint(va_arg(ap, int64_t), 10, 0);
-            else printint(va_arg(ap, int), 10, 0);
+            if (l == 2) printint(va_arg(ap, int64_t), 10, 0, z, n);
+            else printint(va_arg(ap, uint32_t), 10, 0, z, n);
             break;
         case 'd':
-            if (l == 2) printint(va_arg(ap, int64_t), 10, 1);
-            else printint(va_arg(ap, int), 10, 1);
+            if (l == 2) printint(va_arg(ap, int64_t), 10, 1, z, n);
+            else printint(va_arg(ap, int), 10, 1, z, n);
             break;
         case 'x':
-            if (l == 2) printint(va_arg(ap, int64_t), 16, 0);
-            else printint(va_arg(ap, int), 16, 0);
+            if (l == 2) printint(va_arg(ap, int64_t), 16, 0, z, n);
+            else printint(va_arg(ap, uint32_t), 16, 0, z, n);
             break;
         case 'p':
             putch('0');
             putch('x');
-            printint((int64_t)va_arg(ap, void *), 16, 0);
+            printint((int64_t)va_arg(ap, void *), 16, 0, 0, 16);
             break;
         case 'c':
             putch(va_arg(ap, int));
             break;
         case 's':
-            if ((s = (char*)va_arg(ap, char *)) == 0)
+            j = 0;
+            if ((s = (char*)va_arg(ap, char *)) == 0) {
                 s = "(null)";
-            for (; *s; s++)
+                j = 6;
+            }
+            for (; *s; s++) {
                 putch(*s);
+                j++;
+            }
+            if (n > j) {
+                n = n - j;
+                while(n--) {
+                    putch(' ');
+                }
+            }
             break;
         case '%':
             putch('%');
