@@ -1,10 +1,9 @@
 .global arm_vtimer_init
 // 仮想タイマーの初期化
 arm_vtimer_init:
-  // 1. カウント周波数を取得し、仮想タイマーの値を設定
-  mrs x0, cntfrq_el0
-  mov x1, #100
-  udiv x0, x0, x1
+  // 1. 10msで発火するよう仮想タイマーを設定
+  //    240,000 = 24MHz / 100
+  ldr x0, =240000
   msr cntv_tval_el0, x0
 
   // 2. 仮想タイマーを有効化
@@ -15,19 +14,15 @@ arm_vtimer_init:
 .global arm_vtimer_reset
 // 仮想タイマーのリセット
 arm_vtimer_reset:
-  mrs x0, cntfrq_el0
-  mov x1, #100
-  udiv x0, x0, x1
+  ldr x0, =240000
   msr cntv_tval_el0, x0
   ret
 
+// void arm_ptimer_init(int interval);
 .global arm_ptimer_init
 // 物理タイマーの初期化
 arm_ptimer_init:
-  // 1. カウント周波数を取得し、物理タイマーの値を設定
-  mrs x0, cntfrq_el0
-  mov x1, #100
-  udiv x0, x0, x1
+  // 1. 指定の間隔を物理タイマーに設定
   msr cntp_tval_el0, x0
 
   // 2. 仮想タイマーを有効化
@@ -35,12 +30,10 @@ arm_ptimer_init:
   msr cntp_ctl_el0, x0
   ret
 
+// oid arm_ptimer_reset(int interval)
 .global arm_ptimer_reset
 // 物理タイマーのリセット
 arm_ptimer_reset:
-  mrs x0, cntfrq_el0
-  mov x1, #100
-  udiv x0, x0, x1
   msr cntp_tval_el0, x0
   ret
 

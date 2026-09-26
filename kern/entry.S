@@ -164,20 +164,3 @@ secondary_core_setup:
     isb
 
     br      x2
-
-.ltorg
-
-.align  3
-.globl spin_core0
-spin_core0:
-    .quad 0
-.globl spin_core1
-spin_core1:
-    .quad 0
-.globl spin_core2
-spin_core2:
-    .quad 0
-.globl spin_core3
-spin_core3:
-    .quad 0
-

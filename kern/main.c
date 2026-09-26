@@ -15,10 +15,7 @@
 #include <peripherals/uart.h>
 #include <utils.h>
 
-extern uint64_t spin_core0;
-extern uint64_t mp_start;
-
-unsigned long *core_flags = (unsigned long *)&spin_core0;
+int core_flags[NCPU] = { 0 };
 
 #define PSCI_0_2_FN64_CPU_ON  0xC4000003
 
@@ -45,8 +42,6 @@ static void start_secondary_cores(void)
     for (int i = 1; i < NCPU; i++) {
         core_flags[i] = 0;
         __asm_flush_dcache_line(&core_flags[i]);
-        //asm volatile("dc cvac, %0" :: "r"(&core_flags[i]));
-        //asm volatile("dsb sy");
 
         // ATF(PSCI)に対して、「コアi を 物理アドレス _start から起動せよ」と命令する
         // ※ entry_point にはAPが最初に実行すべき物理アドレス（_start）を指定します
@@ -62,8 +57,6 @@ static void start_secondary_cores(void)
         int timeout = 100;
         while (1) {
             __asm_invalidate_dcache_line(&core_flags[i]);
-            //asm volatile("dc ivac, %0" :: "r"(&core_flags[i]));
-            //asm volatile("dsb sy");
 
             if (core_flags[i] == 1) break;
 
@@ -93,15 +86,15 @@ void main(void)
 #endif
 
     alloc_init();
-    irq_init();         // ap
+    irq_init_gicd();
+    irq_init_gicc(0);
     console_init();
-    //trap_init();        // ap
     clock_init();
 
     rtc_init();
-    enable_irq();
     start_secondary_cores();
-    timer_init();       // ap
+    enable_irq();
+    timer_init(0);       // ap
 
 #if 0
     // 同期エラーを発生させてtrapが発生するかチェック -> voctorsのメモリ設定の修正で発生
@@ -129,17 +122,18 @@ void main(void)
     while (1) ;
 }
 
-
 void secondary_main(int core)
 {
     core_flags[core] = 1;
     __asm_flush_dcache_line(&core_flags[core]);
-    //asm volatile("dc cvac, %0" :: "r"(&core_flags[core]));
-    //asm volatile("dsb sy");
 
     info("Hello core %d", core);
 
+    irq_init_gicc(core);
+    timer_init(core);
+    enable_irq();
+
     while (1)
-        asm volatile("wfi");
+        ;
 
 }

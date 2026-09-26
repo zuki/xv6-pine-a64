@@ -9,9 +9,9 @@ void arm_vtimer_intr(void *param);
 void arm_vtimer_reset(void);
 
 // EL1物理タイマー:
-void arm_ptimer_init(void);
+void arm_ptimer_init(int interval);
 void arm_ptimer_intr(void *param);
-void arm_ptimer_reset(void);
+void arm_ptimer_reset(int interval);
 
 uint64_t get_cntfrq_el0(void);
 

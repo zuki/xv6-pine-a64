@@ -11,7 +11,7 @@ static uint32_t arm_gic_nlines(void)
     return 32 * ((get32(GICD_TYPER) & 0x1f) + 1);
 }
 
-static void cpu0_init(void)
+void irq_init_gicd(void)
 {
     for (int i = 0; i < IRQ_LINES; i++) {
         handler[i] = 0;
@@ -51,17 +51,19 @@ static void cpu0_init(void)
     /* gicdを無効にする */
     put32(GICD_CTLR, GICD_CTLR_DISABLE);
 
-    for (irq = GIC_IRQ_SPI; irq < nlines / 32; irq += 32) {
+    //for (irq = GIC_IRQ_SPI; irq < nlines / 32; irq += 32) {
+    for (irq = 0; irq < nlines / 32; irq += 32) {
         put32(GICD_IGROUPRn + 4 * irq, 0x00000000);     /* SPIs group 0 */
-        put32(GICD_ICENABLERn + 4 * irq, 0xffffffff);   /* SPIs disabled */
+        put32(GICD_ICENABLERn + 4 * irq, 0xFFFFFFFF);   /* SPIs disabled */
     }
 
-    for (irq = GIC_IRQ_SPI; irq < nlines / 16; irq += 16) {
+    //for (irq = GIC_IRQ_SPI; irq < nlines / 16; irq += 16) {
+    for (irq = 0; irq < nlines / 16; irq += 16) {
         put32(GICD_ICFGRn + 4 + irq, 0x55555555);       /* SPIs level sensitive */
     }
 
     for (irq = GIC_IRQ_SPI; irq < nlines / 8; irq += 4) {
-        put32(GICD_IPRIORITYRn + 4 * irq, 0xf0f0f0f0);  /* SPI priority */
+        put32(GICD_IPRIORITYRn + 4 * irq, 0xF0F0F0F0);  /* SPI priority */
         put32(GICD_ITARGETSRn + 4 * irq, 0x01010101);   /* SPI on CPU0 */
     }
 
@@ -104,15 +106,23 @@ static void cpu0_init(void)
     //info("cpu0_init ok");
 }
 
-static void cpun_init(void)
+void irq_init_gicc(int core)
 {
     uint32_t iccicr;
 
     put32(GICD_IGROUPRn, 0x00000000);       /* SGIとPPIはセキュア */
-    put32(GICD_ICENABLERn, 0xfe000000);     /* PPIは無効 */
+    put32(GICD_ICENABLERn, 0x00000000);     /* PPIは無効  */
 
-    for (uint32_t i = 0; i < 32; i += 4) {
+    for (uint32_t i = 0; i < 8 ; i++) {
         put32(GICD_IPRIORITYRn + 4 * i, 0x80808080);    /* SGIとPPIの優先度 */
+    }
+
+    for (uint32_t i = 0; i < 4; i++) {
+        put32(GICD_ITARGETSRn + 4 * i, 0x01010101);
+    }
+
+    for (uint32_t i = 4; i < 8; i++) {
+        put32(GICD_ITARGETSRn + 4 * i, (core << 24 | core << 16 | core << 8 | core));
     }
 
     put32(GICC_BPR, GICC_BRP_NOPREMPT); /* プリエンプションをすべて無効にする */
@@ -128,17 +138,12 @@ static void cpun_init(void)
     /* gicdを有効にする */
     put32(GICD_CTLR, GICD_CTLR_ENABLE);
 
+#if 0
+    for (int i = 0; i < 8; i++) {
+        debug("GICD_ITARGETSRn[%d]: 0x%08x", i, get32(GICD_ITARGETSRn + 4 * i));
+    }
+#endif
     //info("cpu%d_init ok", cpuid());
-}
-
-void irq_init(void)
-{
-    if (cpuid() == 0)
-        cpu0_init();
-
-    cpun_init();
-
-    //info("irq_init ok");
 }
 
 void irq_enable(int i)
@@ -146,7 +151,7 @@ void irq_enable(int i)
     int idx = i / 32;
     put32(GICD_ISENABLERn + 4 * idx, 1 << (i % 32));
 
-    trace("GICD_ISENABLER[%d]: 0x%x", idx, get32(GICD_ISENABLERn + 4 * idx));
+    debug("GICD_ISENABLER[%d]: 0x%08x", idx, get32(GICD_ISENABLERn + 4 * idx));
 }
 
 

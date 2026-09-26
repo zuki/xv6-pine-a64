@@ -125,7 +125,8 @@
 #define BUS_SOFT_RST_REG4       (CCU_BASE + 0x02d8)
 #define     BUS_SOFT_RST0_UART0_RST     (1 << 16)
 
-void irq_init(void);
+void irq_init_gicd(void);
+void irq_init_gicc(int core);
 void irq_enable(int i);
 void irq_disable(int i);
 void irq_register(int i, void (*f)(void *), void *param);

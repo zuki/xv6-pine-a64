@@ -42,9 +42,7 @@
 #define HS_TMR_CUR_HI_REG   (HSTIMER_BASE + 0x20)
 
 
-void timer_init(void);
+void timer_init(int core);
 void timer_intr(void *param);
-void arm_ptimer_init(void);
-void arm_ptimer_reset(void);
 
 #endif

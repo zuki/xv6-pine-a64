@@ -29,6 +29,7 @@ void clock_intr(void *param)
 
 
 #if 0
+// SoCのtimerモジュールを使う : GICに割り込みが届かなかったので使わない
 void clock_init(void)
 {
     // Timer0は10ms毎に割り込んでtickを進める
