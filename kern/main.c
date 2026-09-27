@@ -65,7 +65,7 @@ static void start_secondary_cores(void)
                 ng++;
                 break;
             }
-            delayus(1000);
+            delay_us(1000);
         }
     }
     if (ng) {
@@ -101,21 +101,21 @@ void main(void)
     asm volatile("brk #0" : : : "memory");
     // timer値がカウントダウンするかチェック -> する
     delay(1000);
-    debug("timer0 count: 0x%x", get32(TMR0_CUR_VALUE_REG));
-    debug("timer1 count: 0x%x", get32(TMR1_CUR_VALUE_REG));
+    debug("timer0 count: 0x%x", get32va(TMR0_CUR_VALUE_REG));
+    debug("timer1 count: 0x%x", get32va(TMR1_CUR_VALUE_REG));
     // 割り込みが通知されるかチェック -> されない
-    debug("ISPENDR[1]: 0x%x", get32(GICD_ICPENDRn + 4));
+    debug("ISPENDR[1]: 0x%x", get32va(GICD_ICPENDRn + 4));
     delay(12000000);
     // timerで保留フラグが立つかチェック -> 立つ
-    debug("timer pending: 0x%x", get32(TMR_IRQ_STA_REG));
+    debug("timer pending: 0x%x", get32va(TMR_IRQ_STA_REG));
     // SGI割り込みを自分自身に送り割り込みが発生するかチェック -> 発生
     irq_send_sgi_to_me(1);
     // カウンタ周波数を取得 -> 24MHz
     debug("cntfrq_el0: 0x%x", get_cntfrq_el0());
     // uartに直接書き込み、割り込みが発生するか確認　-> 発生
-    put32(UART_THR(0), 0x23);
+    put32va(UART_THR(0), 0x23);
     delay(100);
-    put32(UART_THR(0), 0x23);
+    put32va(UART_THR(0), 0x23);
 
 #endif
 

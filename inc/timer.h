@@ -45,4 +45,7 @@
 void timer_init(int core);
 void timer_intr(void *param);
 
+void delay_ms(uint32_t ms);
+void delay_us(uint32_t us);
+
 #endif

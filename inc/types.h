@@ -21,6 +21,7 @@
 #define ULLONG_MAX  (2ULL*LLONG_MAX+1)
 #define SIZE_MAX    ULLONG_MAX
 
+#ifndef __ASSEMBLER__
 typedef char            int8_t;
 typedef unsigned char   uint8_t;
 typedef short           int16_t;
@@ -75,6 +76,9 @@ typedef unsigned long long  uvlong;
 
 typedef uint32_t            u32int;
 
+typedef __builtin_va_list   va_list;
+
+#endif
 
 #define true            1
 #define false           0
@@ -123,8 +127,6 @@ typedef uint32_t            u32int;
 #define bit_add(p, n) ((p) |= (1U << (n)))
 #define bit_remove(p, n) ((p) &= ~(1U << (n)))
 #define bit_test(p, n) ((p) & (1U << (n)))
-
-typedef __builtin_va_list va_list;
 
 #define va_start(v,l)   __builtin_va_start(v,l)
 #define va_end(v)       __builtin_va_end(v)
