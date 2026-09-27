@@ -2,6 +2,7 @@
 #include <rtc.h>
 #include <arm.h>
 #include <console.h>
+#include <linux/time.h>
 
 uint32_t get_yymmdd(uint32_t year, uint32_t month, uint32_t day)
 {
@@ -27,4 +28,10 @@ void rtc_init(void)
     while (get32va(LOSC_CTRL_REG) & (LOSC_CTRL_RTC_HHMMSS_ACCE | LOSC_CTRL_RTC_YYMMDD_ACCE));
 
     info("rtc_init ok");
+}
+
+// TODO
+int rtc_gettime(struct timespec *xtime)
+{
+    return -1;
 }
