@@ -30,12 +30,20 @@ arm_ptimer_init:
   msr cntp_ctl_el0, x0
   ret
 
-// oid arm_ptimer_reset(int interval)
+// void arm_ptimer_reset(int interval)
 .global arm_ptimer_reset
 // 物理タイマーのリセット
 arm_ptimer_reset:
   msr cntp_tval_el0, x0
   ret
+
+// uint64_t arm_system_counter(void)
+.global arm_system_counter
+// システムカウンター値を取得する
+arm_system_counter:
+  mrs x0, cntpct_el0
+  ret
+
 
 .global get_cntfrq_el0
 get_cntfrq_el0:

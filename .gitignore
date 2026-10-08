@@ -42,3 +42,4 @@ docs/book
 .config
 inc/sunxi/
 *.org
+kern/mmc_save

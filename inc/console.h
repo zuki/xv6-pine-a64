@@ -8,6 +8,11 @@
 
 #define INPUT_BUF   128
 
+#define LBAFlength "l"
+#define LBAF "%" LBAFlength "x"
+#define LBAFU "%" LBAFlength "u"
+
+
 struct serial_channel {
     char buf[INPUT_BUF];
     size_t r;                   // Read index

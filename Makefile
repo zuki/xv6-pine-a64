@@ -25,7 +25,7 @@ OBJCOPY := $(CROSS)-objcopy
 
 CFLAGS := -Wall -O2 -std=gnu11 \
           -fno-pie -fno-pic -fno-stack-protector \
-	  -fno-zero-initialized-in-bss \
+	  -fno-zero-initialized-in-bss -fstack-usage \
           -static -fno-builtin -nostdlib -nostdinc -ffreestanding -nostartfiles \
           -mgeneral-regs-only \
 	  -MMD -MP -Iinc -DLOG_DEBUG

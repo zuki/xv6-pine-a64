@@ -14,5 +14,6 @@ void arm_ptimer_intr(void *param);
 void arm_ptimer_reset(int interval);
 
 uint64_t get_cntfrq_el0(void);
+uint64_t get_system_counter(void);
 
 #endif

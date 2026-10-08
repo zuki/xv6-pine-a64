@@ -492,7 +492,8 @@ int str_replace(char **source, const char *find, const char *replace) {
     trace("new source: %s", *source);
     return count; // 置換した個数を返す
 }
-#endif
+
+
 
 void *memset(void *v, int c, size_t n)
 {
@@ -511,4 +512,4 @@ void *memcpy(void *dst, const void *src, size_t n)
 {
     return memmove(dst, src, n);
 }
-
+#endif

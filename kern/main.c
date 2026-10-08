@@ -14,6 +14,7 @@
 #include <rtc.h>
 #include <peripherals/uart.h>
 #include <utils.h>
+#include <sd.h>
 
 int core_flags[NCPU] = { 0 };
 
@@ -90,11 +91,12 @@ void main(void)
     irq_init_gicc(0);
     console_init();
     clock_init();
-
+    sd_init();
     rtc_init();
     start_secondary_cores();
     enable_irq();
     timer_init(0);       // ap
+
 
 #if 0
     // 同期エラーを発生させてtrapが発生するかチェック -> voctorsのメモリ設定の修正で発生

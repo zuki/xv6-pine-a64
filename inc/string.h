@@ -55,9 +55,9 @@ unsigned long long strtoull(const char *s, char **endptr, int base);
 
 void *memchr(const void *src, int c, size_t n);
 int memcmp(const void *vl, const void *vr, size_t n);
-void *memcpy(void *dst, const void *src, size_t n);
+void *memcpy(void *restrict dest, const void *restrict src, size_t n);
 
-void *memset(void *v, int c, size_t n);
+void *memset(void *dest, int c, size_t n);
 void *memmove(void *dest, const void *src, size_t n);
 
 char *strcpy(char *restrict dest, const char *restrict src);

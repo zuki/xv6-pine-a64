@@ -41,6 +41,7 @@ typedef uint32_t        device_t;
 typedef uint32_t        major_t;
 typedef uint32_t        minor_t;
 typedef uint64_t        ino_t;
+typedef uint64_t        lbaint_t;
 typedef uint32_t        mode_t;
 typedef uint32_t        nlink_t;
 typedef int32_t         pid_t;
@@ -79,6 +80,8 @@ typedef uint32_t            u32int;
 #define true            1
 #define false           0
 #define bool            _Bool
+
+#ifndef __ASSEMBLER__
 
 /* Efficient min and max operations */
 #define MIN(_a, _b)                 \
@@ -131,13 +134,13 @@ typedef __builtin_va_list va_list;
 #define va_arg(v,l)     __builtin_va_arg(v,l)
 #define va_copy(d,s)    __builtin_va_copy(d,s)
 
-#define PACKED		__attribute__ ((packed))
-#define	GALIGN(n)	__attribute__ ((aligned (n)))
-#define NORETURN	__attribute__ ((noreturn))
-#define NOOPT		__attribute__ ((optimize (0)))
-#define STDOPT		__attribute__ ((optimize (2)))
-#define MAXOPT		__attribute__ ((optimize (3)))
-#define WEAK		__attribute__ ((weak))
+#define PACKED          __attribute__ ((packed))
+#define GALIGN(n)       __attribute__ ((aligned (n)))
+#define NORETURN        __attribute__ ((noreturn))
+#define NOOPT           __attribute__ ((optimize (0)))
+#define STDOPT          __attribute__ ((optimize (2)))
+#define MAXOPT          __attribute__ ((optimize (3)))
+#define WEAK            __attribute__ ((weak))
 
 #define major(x) (((x)>>8) & 0xff)
 #define minor(x) ((x) & 0xff)
@@ -145,24 +148,28 @@ typedef __builtin_va_list va_list;
 #define makedev(x,y) ((((x) & 0xff) << 8) | \
         ((y) & 0xff))
 
-#if 0
-static uint16_t byteswap16(uint16_t v)
+#ifndef BIT
+#define BIT(x)  (1U << (x))
+#endif
+
+static inline uint16_t byteswap16(uint16_t v)
 {
     return (v & 0x00ff) << 8 | (v & 0xff00 ) >> 8;
 }
 
-static uint32_t byteswap32(uint32_t v)
+static inline uint32_t byteswap32(uint32_t v)
 {
     return (v & 0x000000ff) << 24 | (v & 0x0000ff00) << 8 | (v & 0x00ff0000) >> 8 | (v & 0xff000000) >> 24;
 }
 
-static uint64_t byteswap64(uint64_t v)
+static inline uint64_t byteswap64(uint64_t v)
 {
     uint32_t vu, vl;
     vu = (uint32_t)((v & 0xffffffff00000000) >> 32);
     vl = (uint32_t)((v & 0xffffffff));
     return ((uint64_t)(byteswap32(vu)) | ((uint64_t)(byteswap32(vl)) << 32));
 }
-#endif
+
+#endif // __ASSEMBLER__
 
 #endif

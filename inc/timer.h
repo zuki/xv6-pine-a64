@@ -45,4 +45,8 @@
 void timer_init(int core);
 void timer_intr(void *param);
 
+/* 割り込みなしのタイマー */
+uint64_t get_timer(uint64_t base);
+uint64_t arm_system_counter(void);
+
 #endif

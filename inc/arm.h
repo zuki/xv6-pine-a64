@@ -74,6 +74,7 @@ static inline void delayus(uint32_t n)
     } while (r < t);
 }
 
+
 // レジスタxに値pを書き込む
 static inline void put32(uint64_t p, uint32_t x)
 {
