@@ -2,7 +2,7 @@
 authors = ["SUZUKI Keiji"]
 multilingual = false
 src = "src"
-title = "xv6-sdhost 作業メモ"
+title = "xv6-pine64 作業メモ"
 
 [output.html]
 default-theme = "rust"

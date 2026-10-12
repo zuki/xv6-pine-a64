@@ -20,6 +20,9 @@ int core_flags[NCPU] = { 0 };
 
 #define PSCI_0_2_FN64_CPU_ON  0xC4000003
 
+extern uint64_t _bss_start;
+extern uint64_t _bss_end;
+
 // PSCIを呼び出すアセンブリラッパー
 static int psci_cpu_on(unsigned long cpuid, unsigned long entry_point, unsigned long context) {
     register unsigned long r0 asm("x0") = PSCI_0_2_FN64_CPU_ON;
@@ -47,7 +50,7 @@ static void start_secondary_cores(void)
         // ATF(PSCI)に対して、「コアi を 物理アドレス _start から起動せよ」と命令する
         // ※ entry_point にはAPが最初に実行すべき物理アドレス（_start）を指定します
         extern void _start(void);
-        int ret = psci_cpu_on(i, (unsigned long)&_start, 0);
+        int ret = psci_cpu_on(i, V2P(&_start), 0);
 
         if (ret != 0) {
             error("PSCI CPU_ON failed for core %d, ret=%d", i, ret);
@@ -80,11 +83,22 @@ void main(void)
 {
 #if 0
     // 1文字デバッグ出力
-    *(volatile uint32_t *)0x01c28000 = 'M';
+    *(volatile uint32_t *)V2P(0xffff000001c28000) = 'M';
     // メモリバリア（C言語のインラインアセンブラ）
     asm volatile("dsb sy" : : : "memory");
     asm volatile("isb" : : : "memory");
 #endif
+
+
+
+    // bssの初期化
+    uint64_t *bss = &_bss_start;
+    while (bss < &_bss_end) {
+        *bss++ = 0;
+    }
+
+    // カーネルページアドレスをkpgrに再セット
+    set_kpgdir();
 
     alloc_init();
     irq_init_gicd();
@@ -130,6 +144,9 @@ void secondary_main(int core)
     __asm_flush_dcache_line(&core_flags[core]);
 
     info("Hello core %d", core);
+
+    // カーネルページアドレスをkpgrに再セット
+    set_kpgdir();
 
     irq_init_gicc(core);
     timer_init(core);

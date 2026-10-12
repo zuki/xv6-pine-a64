@@ -78,6 +78,12 @@
 // #define PTE_UDATA       (PTE_USER | PTE_NORMAL_NC | PTE_PAGE)
 // #define PTE_UDATA       (PTE_USER | PTE_NORMAL | PTE_PAGE | PTE_NG)
 
+// 1GBブロック（Level 1）の記述子（Descriptor）ビットフラグ
+#define L1_BLOCK_VALID   0x1
+#define L1_BLOCK_ATTR    (1 << 10) // AF (Access Flag) を立てておかないとアクセス時フォルトする
+#define L1_BLOCK_NORMAL  (1 << 2)  // MAIRのインデックス1 (Normal Memory)
+#define L1_BLOCK_DEVICE  (0 << 2)  // MAIRのインデックス0 (Device Memory)
+
 /* Address in table or block entry, only support 32 bit physical address. */
 #define PTE_ADDR(pte)   ((uint64_t)(pte) & ~0xFFFF000000000FFFUL)
 #define PTE_FLAGS(pte)  ((uint64_t)(pte) &  0xFFFF000000000FFFUL)
@@ -89,13 +95,18 @@
 #define TCR_T1SZ        ((64 - 48) << 16)
 #define TCR_TG0_4K      (0 << 14)
 #define TCR_TG1_4K      (2 << 30)           /* Different from TG0 */
+#define TCR_FLAGS       (TCR_T0SZ | TCR_T1SZ | TCR_TG0_4K | TCR_TG1_4K)
 #define TCR_SH0_INNER   (3 << 12)
 #define TCR_SH1_INNER   (3 << 28)
 #define TCR_SH0_OUTER   (2 << 12)
 #define TCR_SH1_OUTER   (2 << 28)
-// #define TCR_ORGN0_IRGN0 ((0 << 10) | (0 << 8))
 #define TCR_ORGN0_IRGN0 ((1 << 10) | (1 << 8))
 #define TCR_ORGN1_IRGN1 ((1 << 26) | (1 << 24))
+
+//#define TCR_SH0_OUTER   (0 << 12)
+//#define TCR_SH1_OUTER   (0 << 28)
+//#define TCR_ORGN0_IRGN0 ((0 << 10) | (0 << 8))
+//#define TCR_ORGN1_IRGN1 ((0 << 26) | (0 << 24))
 
 #define TCR_VALUE       (TCR_T0SZ           | TCR_T1SZ      |   \
                          TCR_TG0_4K         | TCR_TG1_4K    |   \

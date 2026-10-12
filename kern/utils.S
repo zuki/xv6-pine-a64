@@ -4,20 +4,32 @@
 // pgdをセットする: void set_pgd(unsigned long pgd);
 .globl set_pgd
 set_pgd:
-    msr    ttbr0_el1, x0
-    tlbi vmalle1is      // Inner Shareableの全仮想アドレスのTLBを無効化
-    dsb ish             // TLB無効化が完了することを保証
+    msr   ttbr0_el1, x0
+    tlbi  vmalle1is     // Inner Shareableの全仮想アドレスのTLBを無効化
+    dsb   ish           // TLB無効化が完了することを保証
     isb                 // パイプラインをクリア
     ret
 
 // pgdを取得する: unsigned long get_pgd(void);
 .globl get_pgd
 get_pgd:
-    mov x1, 0
-    ldr x0, [x1]
-    mov x0, 0x1000
-    msr    ttbr0_el1, x0
-    ldr x0, [x1]
+    mov   x1, 0
+    ldr   x0, [x1]
+    mov   x0, 0x1000
+    msr   ttbr0_el1, x0
+    ldr   x0, [x1]
+    ret
+
+// ttbr1 カーネル仮想アドレス
+
+// kpgdirをセットする: void set_kpgdir(void);
+.globl  set_kpgdir
+set_kpgdir:
+    adr   x1, kpgdir
+    msr   ttbr1_el1, x1
+    tlbi  vmalle1is
+    dsb   ish
+    isb
     ret
 
 // ---------------------- misc -------------------------------------------- //

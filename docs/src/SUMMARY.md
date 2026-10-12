@@ -9,3 +9,4 @@
     - [演習3: 割込みと例外](memos/lab3.md)
     - [演習4: マルチコアとロック](memos/lab4.md)
     - [SDカードを使えるようにする](memos/mmc.md)
+    - [カーネル仮想アドレスを高位アドレスに変更](memos/kernel_va.md)

@@ -6,6 +6,7 @@ unsigned long get_pgd(void);
 void *memcpy_aligned(void *dst, const void *src, unsigned int n);
 void memzero_aligned(void *src, unsigned long n);
 int get_el(void);
+void set_kpgdir(void);
 
 void __asm_flush_dcache_range(void *start, void *end);
 void __asm_flush_dcache_all(int invalidate_only);
