@@ -3,6 +3,7 @@
 ## 参考（コードを利用させていただいている）OSとライブラリ
 
 - [xv6](https://github.com/mit-pdos/xv6-public), [xv6-riscv](https://github.com/mit-pdos/xv6-riscv)
+- [OS-2020Fall-FDU](https://github.com/FDUCSLG/OS-2020Fall-FDU)
 - [rpi_os](https://github.com/Hongqin-Li/rpi-os)
 - [uva-os](https://github.com/fxlin/uva-os-main)
 - [Das U-Boot](https://u-boot-project.org/)
