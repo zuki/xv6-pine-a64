@@ -43,6 +43,34 @@
  * (DEVICE_BASE)
  */
 
+ /* ユーザメモリレイアウト.
+ *  USERTOP        -> ---------------------------   0x0001_0000_0000_0000
+ *                        スタック (16 * 4KB)
+ *                                                  <- sp
+ *  STACKBASE      -> ---------------------------   0x0000_FFFF_FFFF_0000
+ *
+ *                         mmap領域 (128GB)
+ *  MMAPBASE         -> --------------------------- 0x0000_FFDF_FFFF_0000
+ *
+ *                         libc.so (4GB)
+ *  ELF_ET_DYN_BASE  -> --------------------------- 0x0000_FFDE_FFFF_0000
+ *
+ *
+ *                         ヒープ領域
+ *                       ガードページ (4KB)
+ *                    ---------------------------
+ *                         コード領域
+ *  SEGMENT_START -> ---------------------------    0x0000_0000_0040_0000
+ */
+
+#define USERTOP     0x0001000000000000UL    /* Top address of user space. */
+#define STACKPAGE   16
+#define STACKTOP    USERTOP                 /* スタックはUSERTOPから */
+#define STACKBASE   (STACKTOP - STACKPAGE * PGSIZE) /* スタックは16ページ */
+#define MMAPBASE    0x0000FFDFFFFF0000      /* mmapアドレスの基底アドレス */
+#define ELF_ET_DYN_BASE 0x0000FFDEFFFF0000  /* dynamic lib を置くアドレス */
+#define MMAPTOP     USERTOP                 /* ARGV, ENVPなどはstack_topからmmapするため */
+
 
 #define V2P_WO(x) ((x) - KERN_BASE)      /* Same as V2P, but without casts */
 #define P2V_WO(x) ((x) + KERN_BASE)      /* Same as P2V, but without casts */

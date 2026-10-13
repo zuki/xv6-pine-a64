@@ -15,7 +15,7 @@
 #define NR_TASKS        32      // 128      // 32 should be fine. usertests.c seems to expect > 100
 #define NR_MMS          NR_TASKS
 
-// 起動時、カーネルの printf() とユーザによるコンソールへの書き込みを
+// 起動時、カーネルの cprintf() とユーザによるコンソールへの書き込みを
 // UART出力に加えてFBコンソール ("kconsole")にもリダイレクトする。
 // kconsoleがアプリのUIに干渉するのを防ぐため、fb_init()の2回目以降の
 // 呼び出しではkconsoleは無効化される。

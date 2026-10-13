@@ -148,15 +148,15 @@ void vprintfmt(void (*putch)(int), const char *fmt, va_list ap)
 
         switch (c) {
         case 'u':
-            if (l == 2) printint(va_arg(ap, int64_t), 10, 0, z, n);
+            if (l > 0) printint(va_arg(ap, int64_t), 10, 0, z, n);
             else printint(va_arg(ap, uint32_t), 10, 0, z, n);
             break;
         case 'd':
-            if (l == 2) printint(va_arg(ap, int64_t), 10, 1, z, n);
+            if (l > 0) printint(va_arg(ap, int64_t), 10, 1, z, n);
             else printint(va_arg(ap, int), 10, 1, z, n);
             break;
         case 'x':
-            if (l == 2) printint(va_arg(ap, int64_t), 16, 0, z, n);
+            if (l > 0) printint(va_arg(ap, int64_t), 16, 0, z, n);
             else printint(va_arg(ap, uint32_t), 16, 0, z, n);
             break;
         case 'p':
