@@ -2,9 +2,9 @@
 #define INC_MEMLAYOUT_H
 
 // ---------------- memory layout --------------------------- //
-#define PHYS_BASE 0x40000000                /* 物理メモリ最下位アドレス */
-#define PHYS_TOP  0x80000000                /* 物理メモリ最上位アドレス : 1GB */
-#define PHYS_SIZE 0x40000000
+#define PHYS_BASE 0x40000000UL              /* 物理メモリ最下位アドレス */
+#define PHYS_TOP  0x80000000UL              /* 物理メモリ最上位アドレス : 1GB */
+#define PHYS_SIZE 0x40000000UL
 
 #define KERN_BASE 0x0FFFF000000000000       /* カーネル仮想アドレス開始アドレス */
 #define KERN_LINK (KERN_BASE+0x42000000)    /* カーネルリンクアドレス */
@@ -19,10 +19,10 @@
  *
  *
  *                           heap                   RW-
- *  PAGE_START    -> ----------------------------   0x
+ *  PAGE_START    -> ----------------------------   0x4a40_0000
  *                          pages[PAGE_NUM]         RW-
- *                      PAGE_NUM = 0x
- *  *pages        -> ----------------------------   0x
+ *                      PAGE_NUM = 0x35c00
+ *  *pages        -> ----------------------------   0x4a25_2000
  *
  *
  *  (u-boot-end)  -> ----------------------------   0x4a10_0000

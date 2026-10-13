@@ -6,7 +6,7 @@
 #include <arm_timer.h>
 #include <string.h>
 #include <console.h>
-//#include <vectors.h>
+#include <vectors.h>
 #include <vm.h>
 #include <file.h>
 #include <fs.h>

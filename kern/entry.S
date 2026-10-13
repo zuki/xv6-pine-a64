@@ -2,7 +2,6 @@
 #include <memlayout.h>
 #include <param.h>
 #include <sysregs.h>
-#include <sched.h>
 #include <peripherals/uart.h>
 
 .section ".boot", "ax"

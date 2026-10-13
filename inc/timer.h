@@ -2,6 +2,7 @@
 #define INC_TIMER_H
 
 #include <peripherals/base.h>
+#include <linux/time.h>
 
 #define TIMER_BASE          (MMIO_BASE + 0x01C20C00)
 #define TMR_IRQ_EN_REG	    (TIMER_BASE + 0x0)
@@ -41,6 +42,12 @@
 #define HS_TMR_CUR_LO_REG   (HSTIMER_BASE + 0x1c)
 #define HS_TMR_CUR_HI_REG   (HSTIMER_BASE + 0x20)
 
+#define SYSFREQ         24000000        // 24MHz
+#define INTERVAL        (SYSFREQ / HZ)  // 10ms用
+
+#define CYCLEPERSEC     (SYSFREQ)
+#define CYCLEPERMS      (SYSFREQ / 1000)
+#define CYCLEPERUS      (SYSFREQ / 1000 / 1000)
 
 void timer_init(int core);
 void timer_intr(void *param);
@@ -48,5 +55,8 @@ void timer_intr(void *param);
 /* 割り込みなしのタイマー */
 uint64_t get_timer(uint64_t base);
 uint64_t arm_system_counter(void);
+
+void delay_ms(uint32_t ms);
+void delay_us(uint32_t us);
 
 #endif

@@ -89,7 +89,7 @@
 #define MMU_PTE_FLAGS           (MM_TYPE_PAGE | (MT_NORMAL << 2) | MM_ACCESS)           // need to be used with MP_AP_xxx, MM_XN
 
 /* PTE flags */
-#define PTE_P           0x1
+#define PTE_P                   0x1
 
 #define PTE_TABLE       MM_TYPE_PAGE_TABLE  /* Table in level 0/1/2 */
 #define PTE_BLOCK       MM_TYPE_BLOCK       /* Block in level 1/2 */
@@ -110,14 +110,14 @@
 
 // #define PTE_NORMAL_NC   ((MT_NORMAL_NC << 2) | AF_USED | SH_OUTER)
 // #define PTE_NORMAL      ((MT_NORMAL << 2) | AF_USED | SH_OUTER)
-#define PTE_NORMAL_NC   ((MT_NORMAL_NC << 2) | AF_USED | SH_INNER)
-#define PTE_NORMAL      ((MT_NORMAL << 2) | AF_USED | SH_INNER)
-#define PTE_DEVICE      ((MT_DEVICE_nGnRnE << 2) | AF_USED)
+#define PTE_NORMAL_NC           ((MT_NORMAL_NC << 2) | AF_USED | SH_INNER)
+#define PTE_NORMAL              ((MT_NORMAL << 2) | AF_USED | SH_INNER)
+#define PTE_DEVICE              ((MT_DEVICE_nGnRnE << 2) | AF_USED)
 
 /* 1GB/2MB block for kernel, and 4KB page for user. */
-#define PTE_KDATA       (PTE_KERN | PTE_NORMAL | PTE_BLOCK)
-#define PTE_KDEV        (PTE_KERN | PTE_DEVICE | PTE_BLOCK)
-#define PTE_UDATA       (PTE_USER | PTE_NORMAL | PTE_PAGE)
+#define PTE_KDATA               (PTE_KERN | PTE_NORMAL | PTE_BLOCK)
+#define PTE_KDEV                (PTE_KERN | PTE_DEVICE | PTE_BLOCK)
+#define PTE_UDATA               (PTE_USER | PTE_NORMAL | PTE_PAGE)
 // #define PTE_UDATA       (PTE_USER | PTE_NORMAL_NC | PTE_PAGE)
 // #define PTE_UDATA       (PTE_USER | PTE_NORMAL | PTE_PAGE | PTE_NG)
 

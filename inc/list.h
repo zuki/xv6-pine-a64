@@ -1,8 +1,9 @@
 #ifndef INC_LIST_H
 #define INC_LIST_H
 
+#ifndef __ASSEMBLER__
+
 #include <types.h>
-#include <console.h>
 
 #define container_of(ptr, type, member)                 \
 ({                                                      \

@@ -2,6 +2,7 @@
 #define INC_RTC_H
 
 #include <peripherals/base.h>
+#include <linux/time.h>
 
 #define RTC_BASE            (MMIO_BASE + 0x01F00000)
 
@@ -34,5 +35,6 @@ enum weekday {
 };
 
 void rtc_init(void);
+int rtc_gettime(struct timespec *xtime);
 
 #endif
