@@ -81,7 +81,7 @@ el1:
 setup_sp:
     // sp（仮想アドレス）をセットする = (cpuid_reg+1)*4096 + boot_stacks
     // (リニアマッピング: phys 0 --> virt VA_START を想定している)
-    mov     x0, #PGSIZE
+    mov     x0, #PAGE_SIZE
     ldr     x1, =boot_stacks    //  sched.cで定義
     add     x2, cpuid_reg, #1
     mul     x0, x0, x2

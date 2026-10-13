@@ -2,7 +2,7 @@
 #include <arm.h>
 #include <string.h>
 #include <console.h>
-#include <kalloc.h>
+#include <mm.h>
 #include <irq.h>
 #include <timer.h>
 #include <arm_timer.h>

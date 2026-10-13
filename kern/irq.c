@@ -214,7 +214,7 @@ void irq_handler(void/*int user_mode */)
 void irq_error(uint64_t type)
 {
     error("irq of type %d unimplemented", type);
-    panic("irq_error");
+    //panic("irq_error");
 }
 
 void irq_send_sgi_to_me(uint32_t irqno)
@@ -226,3 +226,5 @@ void irq_send_sgi_to_me(uint32_t irqno)
 
     put32va(GICD_SGIR, (2 << 24) | (irqno & 0xf));
 }
+
+

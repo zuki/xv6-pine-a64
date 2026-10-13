@@ -24,10 +24,14 @@ uint64_t rfar(void);
 void sti(void);
 void cli(void);
 void enable_irq(void);
-void diable_irq(void);
+void disable_irq(void);
 void enable_fiq(void);
-void diable_fiq(void);
-int irq_enabled(void);
+void disable_fiq(void);
+int  is_irq_masked(void);
+
+static inline int intr_get(void) {
+    return 1 - is_irq_masked();
+};
 
 #define get32va(x)      get32(PA2VA(x))
 #define put32va(x,v)    put32(PA2VA(x), v)

@@ -3,7 +3,7 @@
 #include <memlayout.h>
 #include <mmu.h>
 
-__attribute__((__aligned__(PGSIZE)))
+__attribute__((__aligned__(PAGE_SIZE)))
 uint64_t kpte1[512] = {
     0x0000000 | PTE_KDEV,
     0x0200000 | PTE_KDEV,
@@ -1034,11 +1034,11 @@ uint64_t kpte2[512] = {
     0x7fe00000 | PTE_KDATA,
 };
 
-__attribute__((__aligned__(PGSIZE)))
+__attribute__((__aligned__(PAGE_SIZE)))
 uint64_t kpud[512] = {
     V2P(kpte1) + PTE_TABLE,
     V2P(kpte2) + PTE_TABLE
 };
 
-__attribute__((__aligned__(PGSIZE)))
+__attribute__((__aligned__(PAGE_SIZE)))
 uint64_t kpgdir[512] = { V2P(kpud) + PTE_TABLE };

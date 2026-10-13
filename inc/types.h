@@ -78,6 +78,8 @@ typedef uint32_t            u32int;
 
 typedef __builtin_va_list   va_list;
 
+#define NELEM(x)            (sizeof(x) / sizeof((x)[0]))
+
 #endif
 
 #define true            1

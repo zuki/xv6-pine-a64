@@ -26,7 +26,7 @@
 **$**$**$*
 ```
 
-- 2026/09/24: cpu1-3はそもそも起動していなかった
+- 2026/09/24 (AM): cpu1-3はそもそも起動していなかった
     - spinに分岐させる前にコアIDを出力させたところ'0'しか出力されないことで発見
 - そのため、spin park方式はダメで、PSCI SMCコール（ATFの機能）で各コアを起動させる必要があった。
     - google ai（「Pine A64への移植: SMPコア起動」スレッド参照）
@@ -103,4 +103,69 @@ Starting kernel ...
 [0]start_secondary_cores#81: start cores ok
 [0]timer_init#15: timer_init ok
 **$*
+```
+
+- 2026/09/24 (PM): 各コア毎に物理タイマーで実装したtimerが1つしか発火しない
+
+```c
+// clock_intr()
+if ((++jiffies % 100) == 0)
+        cprintf("*");
+
+// timer_intr(int core)
+if ((++jiffies2[core] % (200 + core * 100)) == 0)
+        cprintf("%d", core);
+```
+
+- 上記の実装で次の出力となる
+
+```bash
+0|*0\0|*0\0|*0     // '\'の少し、'|'のところで1秒あく。０以外が出力されない
+```
+
+- 20260925am: timer割込みの通知先をコアごとに正しく設定したが、結果は同じ
+
+```bash
+[0]cpun_init#142: GICD_ITARGETSRn[0]: 0x01010101
+[0]cpun_init#142: GICD_ITARGETSRn[1]: 0x01010101
+[0]cpun_init#142: GICD_ITARGETSRn[2]: 0x01010101
+[0]cpun_init#142: GICD_ITARGETSRn[3]: 0x01010101
+[0]cpun_init#142: GICD_ITARGETSRn[4]: 0x00000000
+[0]cpun_init#142: GICD_ITARGETSRn[5]: 0x00000000
+[0]cpun_init#142: GICD_ITARGETSRn[6]: 0x01010100
+[0]cpun_init#142: GICD_ITARGETSRn[7]: 0x01010101
+
+[0]irq_enable#163: GICD_ISENABLER[0]: 0x0800FFFF
+[0]irq_enable#163: GICD_ISENABLER[0]: 0x4800FFFF
+[0]irq_enable#163: GICD_ISENABLER[1]: 0x00000001
+
+[1]cpun_init#142: GICD_ITARGETSRn[0]: 0x02020202
+[1]cpun_init#142: GICD_ITARGETSRn[1]: 0x02020202
+[1]cpun_init#142: GICD_ITARGETSRn[2]: 0x02020202
+[1]cpun_init#142: GICD_ITARGETSRn[3]: 0x02020202
+[1]cpun_init#142: GICD_ITARGETSRn[4]: 0x00000000
+[1]cpun_init#142: GICD_ITARGETSRn[5]: 0x00000000
+[1]cpun_init#142: GICD_ITARGETSRn[6]: 0x02020200
+[1]cpun_init#142: GICD_ITARGETSRn[7]: 0x02020202
+[1]irq_enable#163: GICD_ISENABLER[0]: 0x4000FFFF
+
+[2]cpun_init#142: GICD_ITARGETSRn[0]: 0x04040404
+[2]cpun_init#142: GICD_ITARGETSRn[1]: 0x04040404
+[2]cpun_init#142: GICD_ITARGETSRn[2]: 0x04040404
+[2]cpun_init#142: GICD_ITARGETSRn[3]: 0x04040404
+[2]cpun_init#142: GICD_ITARGETSRn[4]: 0x00000000
+[2]cpun_init#142: GICD_ITARGETSRn[5]: 0x00000000
+[2]cpun_init#142: GICD_ITARGETSRn[6]: 0x04040400
+[2]cpun_init#142: GICD_ITARGETSRn[7]: 0x04040404
+[2]irq_enable#163: GICD_ISENABLER[0]: 0x4000FFFF
+
+[3]cpun_init#142: GICD_ITARGETSRn[0]: 0x08080808
+[3]cpun_init#142: GICD_ITARGETSRn[1]: 0x08080808
+[3]cpun_init#142: GICD_ITARGETSRn[2]: 0x08080808
+[3]cpun_init#142: GICD_ITARGETSRn[3]: 0x08080808
+[3]cpun_init#142: GICD_ITARGETSRn[4]: 0x00000000
+[3]cpun_init#142: GICD_ITARGETSRn[5]: 0x00000000
+[3]cpun_init#142: GICD_ITARGETSRn[6]: 0x08080800
+[3]cpun_init#142: GICD_ITARGETSRn[7]: 0x08080808
+[3]irq_enable#163: GICD_ISENABLER[0]: 0x4000FFFF
 ```

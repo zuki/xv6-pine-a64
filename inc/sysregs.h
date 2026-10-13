@@ -52,4 +52,9 @@
 /* IR (Instruction Length): ESR_EL1[25] */
 #define IL_MASK                     (1 << 25)
 
+#define ESR_ELx_EC_SHIFT            26
+#define ESR_ELx_EC_SVC64            0x15
+#define ESR_ELx_EC_DABT_LOW         0x24
+
+
 #endif

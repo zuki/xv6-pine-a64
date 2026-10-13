@@ -145,10 +145,11 @@ disable_fiq:
   msr   daifset, #1
   ret
 
-// 割り込みがマスクされているか: int irq_enabled(void);
-.globl irq_enabled
-irq_enabled:
-  mrs   x1, daif
-  and   w0, w1, #0x80
+// 割り込みがマスクされているか: int is_irq_masked(void);
+.globl is_irq_masked
+is_irq_masked:
+  mrs   x0, daif
+  lsr   x0, x0, #7
+  and   x0, x0, #1
   ret
 
