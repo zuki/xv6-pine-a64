@@ -12,8 +12,8 @@ void dmb(void);
 void disb(void);
 void delay(uint64_t cycles);
 uint64_t timestamp(void);
-void put32(uint32_t *addr, uint32_t x);
-uint32_t get32(uint32_t *addr);
+void put32(uint64_t addr, uint32_t x);
+uint32_t get32(uint64_t addr);
 void load_vbar_el1(uint64_t *addr);
 void load_sp_el1(uint64_t *addr);
 int cpuid(void);
@@ -33,8 +33,8 @@ static inline int intr_get(void) {
     return 1 - is_irq_masked();
 }
 
-#define get32va(x)      get32(P2V(x))
-#define put32va(x,v)    put32(P2V(x), v)
+//#define get32va(x)      get32(P2V(x))
+//#define put32va(x,v)    put32(P2V(x), v)
 
 #endif      // __ASSEMBLER__
 

@@ -23,7 +23,8 @@
 #include <linux/stat.h>
 
 // cannot call kernel's strlen
- __attribute__((unused)) static unsigned int user_strlen(const char *s)
+ __attribute__((section(".text.user")))
+static unsigned int user_strlen(const char *s)
 {
   int n;
   for(n = 0; s[n]; n++)
@@ -31,6 +32,7 @@
   return n;
 }
 
+__attribute__((section(".text.user")))
 void print_to_console(char *msg) {
     call_sys_write(1 /*stdout*/, msg, user_strlen(msg));
 }
@@ -43,6 +45,7 @@ void print_to_console(char *msg) {
     char *argv[] = {argv0, argv1, 0};
 
 // スタンドアロンユーザプログラム用の「ランチャー」
+__attribute__((section(".text.user")))
 void user_process() {
     USER_PROGRAM1("/sh", "/sh", "");
 

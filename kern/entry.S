@@ -122,25 +122,41 @@ el1:
 
     cbnz    cpuid_reg, secondary_core_start
 
+/*  ここはmmuがオフのため自前で物理アドレスに変換する必要あり
+ldr     x10, =UART_THR(0)
+ldr     x12, =KERN_BASE
+sub     x10, x10, x12         // 物理アドレスに変更
+mov     w11, #0x62
+strb    w11, [x10]            // 'b'を出力
+dsb     sy
+isb
+*/
+
     /* 4. MMUを有効化（SCTLR_EL1のMビットをON） */
     mrs     x1, sctlr_el1
     orr     x1, x1, #1
     msr     sctlr_el1, x1
     isb     /* ここからMMUが有効になり、下位・上位両方のマッピングが有効化 */
 
-// 出力されない
-/*
+/* mmuが有効になったので自前で物理アドレスに変換する必要はない
 ldr     x10, =UART_THR(0)
-//ldr     x12, =KERN_BASE
-//sub     x10, x10, x12         // 物理アドレスに変更
 mov     w11, #0x63
-strb    w11, [x10]            // 'b'を出力
+strb    w11, [x10]            // 'c'を出力
+dsb     sy
+isb
+ */
+
+    /* 5. 仮想アドレスのメイン関数へ「絶対ジャンプ」 */
+    ldr     x1, =run_in_va_bsp
+
+/* ここまでは表示される
+ldr     x10, =UART_THR(0)
+mov     w11, #0x64
+strb    w11, [x10]            // 'd'を出力
 dsb     sy
 isb
 */
 
-    /* 5. 仮想アドレスのメイン関数へ「絶対ジャンプ」 */
-    ldr     x1, =run_in_va_bsp
     br      x1
 
 secondary_core_start:
@@ -167,6 +183,15 @@ secondary_core_start:
 .endm
 
 run_in_va_bsp:
+
+/* これが表示されない
+ldr     x10, =UART_THR(0)
+mov     w11, #0x65
+strb    w11, [x10]            // 'e'を出力
+dsb     sy
+isb
+*/
+
     /* ここからは 0xFFFF_0000_4008_XXXX の仮想アドレス空間で動作 */
     mrs     cpuid_reg, mpidr_el1
     and     cpuid_reg, cpuid_reg, #3

@@ -45,17 +45,19 @@ timestamp:
   ret
 
 // レジスタxに値pを書き込む
-// void put32(uint64 *addr, uint32_t x)
+// void put32(uint32_t *addr, uint32_t x)
 .globl put32
 put32:
-  str   w1, [x0]
+  mov   x2, x0
+  str   w1, [x2]
   ret
 
 // レジスタpの値を読み取る
-// uint32_t get32(uint64_t *addr);
+// uint32_t get32(uint32_t *addr);
 .globl get32
 get32:
-  ldr   w0, [x0];
+  mov   x1, x0
+  ldr   w0, [x1];
   ret
 
 // アドレスpをベクタ基底アドレスレジスタに書き込む

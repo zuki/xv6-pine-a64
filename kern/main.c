@@ -23,9 +23,11 @@ int core_flags[NCPU] = { 0 };
 extern uint64_t _bss_start;
 extern uint64_t _bss_end;
 
+#if 0
 extern uint64_t user_begin;
 extern uint64_t user_end;
 extern void user_process();
+#endif
 
 // PSCIを呼び出すアセンブリラッパー
 static int psci_cpu_on(unsigned long cpuid, unsigned long entry_point, unsigned long context) {
@@ -46,6 +48,7 @@ static int psci_cpu_on(unsigned long cpuid, unsigned long entry_point, unsigned 
 // initで起動されるカーネルスレッドの本体
 void kernel_process(void)
 {
+#if 0
     uint64_t begin = (uint64_t)&user_begin;
     uint64_t end   = (uint64_t)&user_end;
     uint64_t process = (uint64_t)&user_process;
@@ -56,6 +59,7 @@ void kernel_process(void)
     } else {
         info("move_to_user_mode ok");
     }
+#endif
 }
 
 static void start_secondary_cores(void)
@@ -99,7 +103,7 @@ static void start_secondary_cores(void)
 
 void main(void)
 {
-#if 0
+#if 1
     // 1文字デバッグ出力
     *(volatile uint32_t *)V2P(0xffff000001c28000) = 'M';
     // メモリバリア（C言語のインラインアセンブラ）
@@ -113,14 +117,35 @@ void main(void)
         *bss++ = 0;
     }
 
+*(volatile uint32_t *)V2P(0xffff000001c28000) = 'a';
+    // メモリバリア（C言語のインラインアセンブラ）
+    asm volatile("dsb sy" : : : "memory");
+    asm volatile("isb" : : : "memory");
+
     // カーネルページアドレスをkpgrに再セット
     set_kpgdir();
+
+*(volatile uint32_t *)V2P(0xffff000001c28000) = 'i';
+    // メモリバリア（C言語のインラインアセンブラ）
+    asm volatile("dsb sy" : : : "memory");
+    asm volatile("isb" : : : "memory");
+
+    irq_init_gicd();
+*(volatile uint32_t *)V2P(0xffff000001c28000) = 'n';
+    // メモリバリア（C言語のインラインアセンブラ）
+    asm volatile("dsb sy" : : : "memory");
+    asm volatile("isb" : : : "memory");
+
+    irq_init_gicc(0);
+*(volatile uint32_t *)V2P(0xffff000001c28000) = '.';
+    // メモリバリア（C言語のインラインアセンブラ）
+    asm volatile("dsb sy" : : : "memory");
+    asm volatile("isb" : : : "memory");
     console_init();
     info("console ok");
+    //sched_init();
     mm_init();
     sched_init();
-    irq_init_gicd();
-    irq_init_gicc(0);
     clock_init();
     binit();
     iinit();
@@ -128,8 +153,9 @@ void main(void)
     sd_init();
     rtc_init();
     start_secondary_cores();
-    enable_irq();
     timer_init(0);       // ap
+    enable_irq();
+
     schedule();
 
 #if 0
@@ -137,21 +163,21 @@ void main(void)
     asm volatile("brk #0" : : : "memory");
     // timer値がカウントダウンするかチェック -> する
     delay(1000);
-    debug("timer0 count: 0x%x", get32va(TMR0_CUR_VALUE_REG));
-    debug("timer1 count: 0x%x", get32va(TMR1_CUR_VALUE_REG));
+    debug("timer0 count: 0x%x", get32(TMR0_CUR_VALUE_REG));
+    debug("timer1 count: 0x%x", get32(TMR1_CUR_VALUE_REG));
     // 割り込みが通知されるかチェック -> されない
-    debug("ISPENDR[1]: 0x%x", get32va(GICD_ICPENDRn + 4));
+    debug("ISPENDR[1]: 0x%x", get32(GICD_ICPENDRn + 4));
     delay(12000000);
     // timerで保留フラグが立つかチェック -> 立つ
-    debug("timer pending: 0x%x", get32va(TMR_IRQ_STA_REG));
+    debug("timer pending: 0x%x", get32(TMR_IRQ_STA_REG));
     // SGI割り込みを自分自身に送り割り込みが発生するかチェック -> 発生
     irq_send_sgi_to_me(1);
     // カウンタ周波数を取得 -> 24MHz
     debug("cntfrq_el0: 0x%x", get_cntfrq_el0());
     // uartに直接書き込み、割り込みが発生するか確認　-> 発生
-    put32va(UART_THR(0), 0x23);
+    put32(UART_THR(0), 0x23);
     delay(100);
-    put32va(UART_THR(0), 0x23);
+    put32(UART_THR(0), 0x23);
 
 #endif
 
@@ -173,9 +199,10 @@ void secondary_main(int core)
     irq_init_gicc(core);
     timer_init(core);
     enable_irq();
+    schedule();
 
     while (1)
-        ;
+        asm volatile("wfi");
 
 }
 

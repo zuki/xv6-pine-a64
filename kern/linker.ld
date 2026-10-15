@@ -14,16 +14,10 @@ SECTIONS
         _boot_end = .;
     }
 
-    user_begin = .;
-    .text.user : { obj/kern/user* (.text) }
-    .rodata.user : { obj/kern/user* (.rodata) }
-    .data.user : { obj/kern/user* (.data) }
-    .bss.user : { obj/kern/user* (.bss) }
-    user_end = .;
-
-    .text : AT(_phys_start + (_boot_end - _boot_start) + (user_end - user_begin)) {
+    .text : AT(_phys_start + (_boot_end - _boot_start)) {
         *(.text)
     }
+
     PROVIDE(etext = .);
     .rodata : { *(.rodata) }
     PROVIDE(data = .);
