@@ -2,11 +2,13 @@
 #define INC_FS_H
 
 #include <types.h>
+#include <param.h>
 #include <file.h>
 #include <linux/time.h>
 #include <linux/fcntl.h>
 #include <linux/stat.h>
-//#include <sd.h>
+#include <sd.h>
+#include <sched.h>
 
 // ディスク上のファイルシステムフォーマット.
 // カーネル/ユーザプログラムの両者がこのヘッダーファイルを使用する.
@@ -42,7 +44,6 @@ struct superblock {
 
 #define FSMAGIC     0x10203040
 
-#define NDIRECT     11      // 直接指定のブロック数
 #define NINDIRECT   (BSIZE / sizeof(uint))      // 第一間接指定のブロック数
 #define NINDIRECT2  (NINDIRECT * NINDIRECT)     // 第二間接指定のブロック数
 #define MAXFILE     (NDIRECT + NINDIRECT + NINDIRECT2)   // 1ファイルの最大ブロック数 - 11 + 1024 + 1,048,576 = 1,049,611 : * 4096 = 4100 MB

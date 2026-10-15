@@ -156,17 +156,19 @@ typedef __builtin_va_list   va_list;
 
 //static inline uint16_t byteswap16(uint16_t v);
 
-#if 0
+/*
 static uint16_t byteswap16(uint16_t v)
 {
     return (v & 0x00ff) << 8 | (v & 0xff00 ) >> 8;
 }
+*/
 
-static uint32_t byteswap32(uint32_t v)
+static inline uint32_t byteswap32(uint32_t v)
 {
     return (v & 0x000000ff) << 24 | (v & 0x0000ff00) << 8 | (v & 0x00ff0000) >> 8 | (v & 0xff000000) >> 24;
 }
 
+/*
 static uint64_t byteswap64(uint64_t v)
 {
     uint32_t vu, vl;
@@ -174,7 +176,7 @@ static uint64_t byteswap64(uint64_t v)
     vl = (uint32_t)((v & 0xffffffff));
     return ((uint64_t)(byteswap32(vu)) | ((uint64_t)(byteswap32(vl)) << 32));
 }
-#endif
+*/
 
 #endif          // __ASSEMBLER__
 

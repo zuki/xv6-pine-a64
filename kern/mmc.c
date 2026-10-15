@@ -295,7 +295,7 @@ int mmc_poll_for_busy(struct mmc *mmc, int timeout_ms)
         if (timeout_ms-- <= 0)
             break;
 
-        delayus(1000);
+        delay_us(1000);
     }
 
     if (timeout_ms <= 0) {
@@ -428,7 +428,7 @@ static int mmc_go_idle(struct mmc *mmc)
     struct mmc_cmd cmd;
     int err;
 
-    delayus(1000);
+    delay_us(1000);
 
     cmd.cmdidx = MMC_CMD_GO_IDLE_STATE;
     cmd.cmdarg = 0;
@@ -439,7 +439,7 @@ static int mmc_go_idle(struct mmc *mmc)
     if (err)
         return err;
 
-    delayus(2000);
+    delay_us(2000);
 
     return 0;
 }
@@ -494,7 +494,7 @@ static int sd_send_op_cond(struct mmc *mmc, bool uhs_en)
         if (timeout-- <= 0)
             return -EOPNOTSUPP;
 
-        delayus(1000);
+        delay_us(1000);
     }
 
     if (mmc->version != SD_VERSION_2)
@@ -559,7 +559,7 @@ static int mmc_send_op_cond(struct mmc *mmc)
 
         if (get_timer(start) > timeout)
             return -ETIMEDOUT;
-        delayus(100);
+        delay_us(100);
     }
     mmc->op_cond_pending = 1;
     return 0;
@@ -586,7 +586,7 @@ static int mmc_complete_op_cond(struct mmc *mmc)
                 break;
             if (get_timer(start) > timeout)
                 return -EOPNOTSUPP;
-            delayus(100);
+            delay_us(100);
         }
     }
 
@@ -651,7 +651,7 @@ static int __mmc_switch(struct mmc *mmc, uint8_t set, uint8_t index, uint8_t val
      * stated timeout to be sufficient.
      */
     if (ret == -ENOSYS && !send_status) {
-        delayus(timeout_ms * 1000);
+        delay_us(timeout_ms * 1000);
         return 0;
     }
 
@@ -674,7 +674,7 @@ static int __mmc_switch(struct mmc *mmc, uint8_t set, uint8_t index, uint8_t val
         if (!ret && (status & MMC_STATUS_RDY_FOR_DATA) &&
             (status & MMC_STATUS_CURR_STATE) == MMC_STATE_TRANS)
             return 0;
-        delayus(100);
+        delay_us(100);
     } while (get_timer(start) < timeout_ms);
 
     return -ETIMEDOUT;
@@ -1958,7 +1958,7 @@ static int mmc_power_cycle(struct mmc *mmc)
      * SD spec recommends at least 1ms of delay. Let's wait for 2ms
      * to be on the safer side.
      */
-    delayus(2000);
+    delay_us(2000);
     return mmc_power_on(mmc);
 }
 

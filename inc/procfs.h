@@ -1,3 +1,6 @@
+#ifndef INC_PROCFS_H
+#define INC_PROCFS_H
+
 // procfsに関する考察
 
 // READ
@@ -26,7 +29,11 @@ struct procfs_state {
 };
 _Static_assert(sizeof (struct procfs_state) < 4096);
 
+struct file;
+
 // いずれも kernel/file.c で実装
 void procfs_init_state(struct procfs_state *st);            // sys_open()からcall
 int procfs_gen_content(int major, char *txtbuf, int sz);    // sys_open()からcall
 int procfs_parse_usercontent(struct file *f);               // fileclose()からcall
+
+#endif

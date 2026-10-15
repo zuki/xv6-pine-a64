@@ -15,6 +15,7 @@
 #include <clock.h>
 #include <string.h>
 #include <linux/stat.h>
+#include <mm.h>
 //#include <linux/capability.h>
 
 // デバイス操作関数
@@ -25,6 +26,8 @@ struct {
     struct spinlock lock;
     struct file file[NFILE];
 } ftable;
+
+static void init_devfs();
 
 // ファイル機能を初期化する
 void fileinit()
@@ -61,14 +64,14 @@ struct file *filedup(struct file *f)
     return f;
 }
 
-static struct inode *create(char *path, int fd, int16_t type, uint16_t major, uint16_t minor, mode_t mode)
+static struct inode *create(char *path, int dirfd, int16_t type, uint16_t major, uint16_t minor, mode_t mode)
 {
     struct inode *ip, *dp;
     char name[DIRSIZ];
     //struct timespec ts;
     int error = -EINVAL;
 
-    if ((dp = nameiparent(path, name, fd)) == 0)
+    if ((dp = nameiparent(path, name, dirfd)) == 0)
         return (void *)-ENOENT;
 
     ilock(dp);
@@ -117,7 +120,7 @@ static struct inode *create(char *path, int fd, int16_t type, uint16_t major, ui
         }
     }
 
-    if ((error = dirlnk(dp, name, ip->inum, ip->type)) < 0) {
+    if ((error = dirlink(dp, name, ip->inum, ip->type)) < 0) {
         goto fail;
     }
 
@@ -134,11 +137,11 @@ fail:
     iupdate(ip);
     iunlockput(ip);
     iunlockput(dp);
-    return (void *)error;
+    return (void *)(uint64_t)error;
 }
 
 // ファイルを開く
-int fileopen(char *path, int fd, int flags, mode_t mode)
+int fileopen(char *path, int dirfd, int flags, mode_t mode)
 {
     struct inode *ip;
     struct file *f;
@@ -147,22 +150,22 @@ int fileopen(char *path, int fd, int flags, mode_t mode)
     int error;
 
     if (flags & O_CREAT) {
-        ip = namei(path, fd);
+        ip = namei(path, dirfd);
         if (ip && flags & O_EXCL) {
             iput(ip);
             warn("O_CREAT && O_EXCL and  %s exists", path);
             return -EEXIST;
         } else if (!ip) {
-            if ((long)(ip = create(path, fd, T_FILE, 0, 0, mode | S_IFREG)) < 0) {
+            if ((long)(ip = create(path, dirfd, T_FILE, 0, 0, mode | S_IFREG)) < 0) {
                 warn("cant create %s", path);
-                return (int)ip;
+                return (int)(long)ip;
             }
         } else {
             ilock(ip);
         }
     } else {
 loop:
-        if ((ip = namei(path, fd)) == 0) {
+        if ((ip = namei(path, dirfd)) == 0) {
             warn("cant namei %s", path);
             return -ENOENT;
         }
@@ -298,7 +301,8 @@ int filestat(struct file *f, uint64_t addr)
     return -EFAULT;
 }
 
-static int procfs_read(struct file *f, uint64_t dst, uint32_t n);
+static int procfs_read(struct file *f, uint64_t dst, size_t n);
+static int procfs_write(struct file *f, uint64_t src, size_t n);
 
 /* ファイルfを読み取る */
 ssize_t fileread(struct file *f, uint64_t addr, ssize_t n)
@@ -367,7 +371,7 @@ ssize_t fileread(struct file *f, uint64_t addr, ssize_t n)
     }
 #endif
     else if (f->type == FD_PROCFS) {
-        return procfs_rea(f, addr, n);
+        return procfs_read(f, addr, n);
     } else {
         error("invalid file type: %d", f->type);
         r = -EINVAL;
@@ -474,7 +478,6 @@ ssize_t filewrite(struct file *f, uint64_t addr, ssize_t n)
 
 off_t filelseek(struct file *f, off_t offset, int whence)
 {
-    int newoff;
     uint32_t size = 0;
 
     if (!f) return -EBADF;
@@ -576,14 +579,13 @@ bad:
     return -EINVAL;
 }
 
-int filelink(char *oldpath, int oldfd, char *newpath, int newfd)
+int filelink(char *oldpath, int olddirfd, char *newpath, int newdirfd)
 {
     char name[DIRSIZ];
     struct inode *dp, *ip;
     int error;
 
-    begin_op();
-    if ((ip = namei(oldpath, oldfd)) == 0) {
+    if ((ip = namei(oldpath, olddirfd)) == 0) {
         return -ENOENT;
     }
 
@@ -597,7 +599,7 @@ int filelink(char *oldpath, int oldfd, char *newpath, int newfd)
     iupdate(ip);
     iunlock(ip);
 
-    if ((dp = nameiparent(newpath, name, newfd)) == 0) {
+    if ((dp = nameiparent(newpath, name, newdirfd)) == 0) {
         error = -ENOENT;
         goto bad;
     }
@@ -626,14 +628,14 @@ bad:
     return error;
 }
 
-int filesymlink(char *target, char *linkpath, int fd)
+int filesymlink(char *target, char *linkpath, int dirfd)
 {
     char name[DIRSIZ];
     struct inode *dp, *ip;
     int error;
     //struct timespec ts;
 
-    if ((dp = nameiparent(linkpath, name, fd)) == 0) {
+    if ((dp = nameiparent(linkpath, name, dirfd)) == 0) {
         return -ENOENT;
     }
 
@@ -670,19 +672,19 @@ int filesymlink(char *target, char *linkpath, int fd)
     return 0;
 }
 
-ssize_t filereadlink(char *path, int fd, char *buf, size_t bufsize)
+ssize_t filereadlink(char *path, int dirfd, char *buf, size_t bufsize)
 {
     struct inode *ip, *dp;
     ssize_t n;
     char name[DIRSIZ];
 
-    if ((dp = nameiparent(path, name, fd)) == 0) {
+    if ((dp = nameiparent(path, name, dirfd)) == 0) {
         return -ENOTDIR;
     } else {
         iput(dp);
     }
 
-    if ((ip = namei(path, fd)) == 0) {
+    if ((ip = namei(path, dirfd)) == 0) {
         return -ENOENT;
     }
 
@@ -692,7 +694,7 @@ ssize_t filereadlink(char *path, int fd, char *buf, size_t bufsize)
         return -EINVAL;
     }
 
-    if ((n = readi(ip, 1, buf, 0, bufsize)) <= 0) {
+    if ((n = readi(ip, 1, (uint64_t)buf, 0, bufsize)) <= 0) {
         iunlockput(ip);
         return -EIO;
     }
@@ -701,14 +703,14 @@ ssize_t filereadlink(char *path, int fd, char *buf, size_t bufsize)
     return n;
 }
 
-int fileunlink(char *path, int fd, int flags)
+int fileunlink(char *path, int dirfd, int flags)
 {
     struct inode *ip, *dp;
     char name[DIRSIZ];
-    size_t off;
+    uint32_t off;
     int error;
 
-    if ((dp = nameiparent(path, name, fd)) == 0) {
+    if ((dp = nameiparent(path, name, dirfd)) == 0) {
         return -ENOENT;
     }
 
@@ -728,9 +730,8 @@ int fileunlink(char *path, int fd, int flags)
 
     ilock(ip);
     error = iunlink(dp, ip, flags);
-
-badip:
     iunlockput(ip);
+
 baddp:
     iunlockput(dp);
 
@@ -758,7 +759,6 @@ int filemknod(char *path, mode_t mode, device_t dev)
 {
     struct inode *ip;
     uint16_t major, minor;
-    int error;
 
     if (!S_ISCHR(mode) && !S_ISBLK(mode)) {
         error("bad type: 0x%lx", mode & S_IFMT);
@@ -770,7 +770,7 @@ int filemknod(char *path, mode_t mode, device_t dev)
 
     if ((long)(ip = create(path, AT_FDCWD, T_DEVICE, major, minor, mode)) < 0) {
         error("error: 0x%lx", (long)ip);
-        return (int)ip;
+        return (int)(long)ip;
     }
     trace("created: ip=%d", ip->inum);
     iunlockput(ip);
@@ -781,10 +781,9 @@ int filechdir(char *path)
 {
     struct inode *ip;
     struct task_struct *p = myproc();
-    int error;
 
-    if ((error = namei(path, AT_FDCWD)) < 0)
-        return error;
+    if ((long)(ip = namei(path, AT_FDCWD)) < 0)
+        return (int)(long)ip;
     ilock(ip);
     if (ip->type != T_DIR) {
         iunlockput(ip);
@@ -844,7 +843,7 @@ int utimensat(char *path, struct timespec times[2])
 }
 #endif
 
-int filechmod(struct file *f, char *path, int fd, mode_t mode)
+int filechmod(struct file *f, char *path, int dirfd, mode_t mode)
 {
     struct inode *ip;
 
@@ -852,7 +851,7 @@ int filechmod(struct file *f, char *path, int fd, mode_t mode)
         ip = f->ip;
         idup(ip);
     } else {
-        if ((ip = namei(path, fd)) == 0) {
+        if ((ip = namei(path, dirfd)) == 0) {
             return -ENOENT;
         }
     }
@@ -998,7 +997,7 @@ static int rename(struct inode *dp, char *name1, char *name2)
 {
     struct inode *ip;
     struct dirent de;
-    size_t off;
+    uint32_t off;
 
     ilock(dp);
     if ((ip = dirlookup(dp, name1, &off)) == 0)
@@ -1031,8 +1030,8 @@ static int reinode(struct inode *dp, struct inode *old_ip, struct inode *new_ip,
     int error;
 
     ilock(dp);
-    old_ilock(old_ip);
-    new_ilock(new_ip);
+    ilock(old_ip);
+    ilock(new_ip);
     if (direntlookup(dp, old_ip->inum, &de, &off) < 0) {
         error = -ENOENT;
         goto bad;
@@ -1063,27 +1062,19 @@ bad:
     return error;
 }
 
-int filerename(char *oldpath, int oldfd, char *newpath, int newfd, uint32_t flags)
+int filerename(char *oldpath, int olddirfd, char *newpath, int newdirfd)
 {
     struct inode *ip1, *ip2, *dp1, *dp2;
     char name1[DIRSIZ], name2[DIRSIZ];
     int error;
 
-    if (flags & RENAME_NOREPLACE) {
-        if ((ip2 = namei(newpath, newfd)) != 0) {
-            iput(ip2);
-            error("RENAME_NOREPLACE & newpath exist");
-            return -EEXIST;
-        }
-    }
-
-    if ((ip1 = namei(oldpath, oldfd)) == 0) {
+    if ((ip1 = namei(oldpath, olddirfd)) == 0) {
         warn("oldpath %s not exits", oldpath);
         return -ENOENT;
     }
-    dp1 = nameiparent(oldpath, name1, oldfd);
-    ip2 = namei(newpath, newfd);
-    dp2 = nameiparent(newpath, name2, newfd);
+    dp1 = nameiparent(oldpath, name1, olddirfd);
+    ip2 = namei(newpath, newdirfd);
+    dp2 = nameiparent(newpath, name2, newdirfd);
     trace("oldpath: %s, dp1: %d, ip1: %d, name1: %s", oldpath, dp1->inum, ip1->inum, name1);
     trace("newpath: %s, dp2: %d, ip2: %d, name2: %s", newpath, dp2 ? dp2->inum : -1, ip2 ? ip2->inum : -1, name2);
 
@@ -1129,10 +1120,10 @@ rename1:
                 iput(ip1);
                 goto bad;
             }
-            flags = ip1->type == T_DIR ? AT_REMOVEDIR : 0;
+            int flags = ip1->type == T_DIR ? AT_REMOVEDIR : 0;
             iput(dp1);
             iput(ip1);
-            return fileunlink(oldpath, oldfd, flags);
+            return fileunlink(oldpath, olddirfd, flags);
         } else {
             error = reinode(dp2, ip2, ip1, name2);
             iput(dp1);
@@ -1273,6 +1264,104 @@ bad2:
 }
 #endif
 
+// TODO: procfs
+static int procfs_read(struct file *f, uint64_t dst, size_t n)
+{
+    size_t len, off, sz;
+    char *buf;
+    struct procfs_state *st = (struct procfs_state *)f->content;
+    assert(st);
+    off = st->koff;
+    sz = st->ksize;
+    buf = st->kbuf;
+    assert(off <= sz);
+    len = MIN(n, sz - off);
+    if (either_copyout(1, dst, buf + off, len) < 0) {
+        error("failed copyout");
+        return -1;
+    }
+    st->koff += len;
+    return len;
+}
+
+static int procfs_write(struct file *f, uint64_t src, size_t n)
+{
+    size_t len, off;
+    char *buf;
+    struct procfs_state *st = (struct procfs_state *)f->content;
+    assert(st);
+    off = st->uoff;
+    buf = st->ubuf;
+    len = MIN(n, MAX_PROCFS_SIZE - off);
+    if (either_copyin(buf + off, 1, src, len) < 0) {
+        error("failed copyin");
+        return -1;
+    }
+    st->uoff += len;
+    if (off + len > st->usize)
+        st->usize = off + len;
+    return len;
+}
+
+#define TXTSIZE     256
+int procfs_gen_content(int major, char *txtbuf, int sz)
+{
+    int len = 0;
+
+    switch (major) {
+        case PROCFS_CPUINFO:
+            // 行１: cpu利用率, 例　"10 20 30 40"
+            char *p = txtbuf;
+            int ll;
+            for (int i = 0; i < NCPU; i++) {
+                ll = snprintf(p, sz, "%d ", cpus[i].last_util);
+                len += ll; sz -= ll; p += ll;
+            }
+            ll = snprintf(p, sz, "\n");
+            len += ll; sz -= ll, p += ll;
+            // 行2: ページ使用率
+            ll = snprintf(p, sz, "paging mem: used %u total %u (%u/100)\n",
+                paging_pages_used, PAGE_NUM, paging_pages_used * 100 / PAGE_NUM);
+            len += ll; sz -= ll, p += ll;
+            break;
+        default:
+            len = 0;
+            break;
+    }
+    return len;
+}
+
+int procfs_parse_usercontent(struct file *f)
+{
+    return 0;
+#if 0
+    struct procfs_state *st = (struct procfs_state *)f->content;
+    assert(st);
+    char *buf = st->ubuf, *s;
+    uint32_t len = st->usize, nargs = 0;
+    int args[PROCFS_MAX_ARGS] = { 0 };
+
+    for (s = buf; s < buf + len; s++) {
+        if (*s == '\n' || *s == '\0')
+            break;
+        if ('0' <= *s && *s <= '9') {
+            args[nargs] = atoi(s);
+            while ('0' <= *s && *s <= '9' && s < buf + len)
+                s++;
+            if (nargs++ == PROCFS_MAX_ARGS)
+                break;
+        }
+
+        switch(f->major) {
+            default:
+                return 0;
+        }
+        return nargs;
+    }
+
+    return -1;
+#endif
+}
 
 int devnull_read(int user_dst, uint64_t dst, int off, int n, char blocking, void *content)
 {
@@ -1303,4 +1392,13 @@ void procfs_init_state(struct procfs_state *st)
 {
     st->ksize = st->usize = 0;
     st->koff = st->uoff = 0;
+}
+
+static void init_devfs()
+{
+    devsw[DEVNULL].read = devnull_read;
+    devsw[DEVNULL].write = devnull_write;
+
+    devsw[DEVZERO].read = devzero_read;
+    devsw[DEVZERO].write = 0;
 }

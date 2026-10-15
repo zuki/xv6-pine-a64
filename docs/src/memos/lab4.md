@@ -80,7 +80,7 @@ static void start_secondary_cores(void)
                 ng++;
                 break;
             }
-            delayus(1000);
+            delay_us(1000);
         }
     }
     if (ng) {

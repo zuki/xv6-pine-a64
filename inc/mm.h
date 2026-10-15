@@ -92,6 +92,8 @@ struct page {
     struct page* next;      /**< 次のページ構造体へのポインタ */
 };
 
+extern unsigned paging_pages_used;
+
 extern struct page *pages;
 
 void            mm_init(void);

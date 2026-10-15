@@ -10,6 +10,9 @@
 #include <vm.h>
 #include <file.h>
 #include <fs.h>
+#include <mm.h>
+#include <linux/wait.h>
+#include <linux/errno.h>
 
 // ２種類のタイマーで計時とスケジューラを駆動する（どちらも1tick=10ms）
 //   - コアごとにあるARM汎用物理タイマー: スケジューラtickとして使用
@@ -329,11 +332,13 @@ static int reparent(struct task_struct *p)
 
 static void freeproc(struct task_struct *p);
 
+#if 0
 // 子プロセスがexitするのを待機して、そのpidを返す。
 // このプロエスが子を持たない場合は -1 を返す。
 // addr=0 はstatusを考慮しない特別な場合
 int wait(uint64_t addr)
 {
+
     struct task_struct **pp;
     int havekids, pid;
     struct task_struct *p = myproc();
@@ -370,6 +375,54 @@ int wait(uint64_t addr)
         sleep(p, &sched_lock);
     }
 }
+#endif
+
+int wait4(pid_t pid, int *status, int options, struct rusage *ru)
+{
+    struct task_struct **pp;
+    int havekids;
+    struct task_struct *p = myproc();
+
+    acquire(&sched_lock);
+
+    for (;;) {
+        havekids = 0;
+        for (pp = tasks; pp < &tasks[NR_TASKS]; pp++) {
+            struct task_struct *p0 = *pp;
+            assert(p0);
+            if (p0->state == TASK_UNUSED || p0->parent != p) continue;
+            // TODO: p->pgidを作成したら条件を増やす
+            if (pid > 0) {
+                if (p->pid != pid)
+                    continue;
+            }
+            havekids = 1;
+            if (p0->state == TASK_ZOMBIE
+             || (options & WUNTRACED && p0->state == TASK_SLEEPING)
+             || (options & WNOHANG)) {
+                int status = p->xstate << 8;
+                if (status && copyout(p->mm, (uint64_t)status, (char *)&status, sizeof(int)) < 0) {
+                    release(&sched_lock);
+                    return -EINVAL;
+                }
+                if (ru && copyout(p->mm, (uint64_t)ru, 0, sizeof(struct rusage)) < 0) {
+                    release(&sched_lock);
+                    return -EINVAL;
+                }
+                pid = p0->pid;
+                freeproc(p0);
+                release(&sched_lock);
+                return pid;
+            }
+        }
+        if (!havekids || killed(p)) {
+            release(&sched_lock);
+            return -ECHILD;
+        }
+        sleep(p, &sched_lock);
+    }
+}
+
 
 // ゾンビタスクとなり、親タスクがwait()を正常に呼び出した場合にのみ、そのタスクから
 // CPUが切り離される
@@ -498,11 +551,9 @@ void procdump(void) {
         cprintf("\t %5d %10s %10s %20llx\n", p->pid, state, p->name, (uint64_t)p->chan);
     }
 
-// TBD: /proc/meminfoに移動する。malloc() 割り当てもカウントする
-extern unsigned paging_pages_used, paging_pages_total; // alloc.c
     info("paging mem: used %u total %u (%u/100)\n",
-        paging_pages_used, paging_pages_total,
-        paging_pages_used*100/(paging_pages_total));
+        paging_pages_used, PAGE_NUM,
+        paging_pages_used*100/(PAGE_NUM));
 
     // debug
     info("cpu total ticks: %llu %llu %llu %llu\n",
@@ -551,7 +602,7 @@ int move_to_user_mode(uint64_t start, uint64_t size, uint64_t pc)
 
     regs->pstate = PSR_MODE_EL0t;
     regs->pc = pc;
-    regs->sp = USER_VA_END;
+    regs->sp = USER_TOP;
 
     void *code_page = allocate_user_page_mm(cur->mm, 0, MMU_PTE_FLAGS | MM_AP_RW);
     if (code_page == 0) {
@@ -649,7 +700,7 @@ int copy_process(uint64_t clone_flags, uint64_t fn, uint64_t arg, const char *na
 
     p->cpu_context.pc = (uint64_t)ret_from_fork;
     p->cpu_context.sp = (uint64_t)childregs;
-    p->cpu_context.fp = (uint64_t)childregs->stackfarme;
+    p->cpu_context.fp = (uint64_t)childregs->stackframe;
 
     release(&cur->lock);
     release(&p->lock);

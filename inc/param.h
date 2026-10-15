@@ -14,6 +14,7 @@
 #define NBUF            (MAXOPBLOCKS*3)     // size of disk block cache
 #define NR_TASKS        32      // 128      // 32 should be fine. usertests.c seems to expect > 100
 #define NR_MMS          NR_TASKS
+#define NDIRECT         11      // 直接指定のブロック数
 
 // 起動時、カーネルの cprintf() とユーザによるコンソールへの書き込みを
 // UART出力に加えてFBコンソール ("kconsole")にもリダイレクトする。
@@ -44,20 +45,24 @@
 #define MALLOC_PAGES    (8*1024*1024 / PAGE_SIZE)
 
 // 大きなユーザ仮想メモリ。ただし、freecount()のためにusertestsは遅くなる
-#define USER_VA_END     (128 * 1024 * 1024) // == ユーザスタックのトップ。128MBのユーザ仮想アドレス
+#define USER_TOP     (128 * 1024 * 1024) // == ユーザスタックのトップ。128MBのユーザ仮想アドレス
 #define USER_MAX_STACK  (1 * 1024 * 1024)  // バイト単位、ページアライン
-#define MAX_TASK_USER_PAGES (USER_VA_END / PAGE_SIZE)   // タスクあたりの最大ユーザページ数
+#define MAX_TASK_USER_PAGES (USER_TOP / PAGE_SIZE)   // タスクあたりの最大ユーザページ数(32,768)
 #define MAX_TASK_KER_PAGES  96      // タスクあたりの最大カーネルページ数  (128 seems to corrupt kernel stack
 
 // 小さなユーザ仮想メモリ（問題なし: userstests,slider,etc. メモリ不足: liteNesなど)
-// #define USER_VA_END         (4 * 1024 * 1024) // == user stack top
+// #define USER_TOP         (4 * 1024 * 1024) // == user stack top
 // #define USER_MAX_STACK      (1 * 1024 * 1024)  // in bytes, must be page aligned.
-// #define MAX_TASK_USER_PAGES (USER_VA_END / PAGE_SIZE)      // max userpages per task,
+// #define MAX_TASK_USER_PAGES (USER_TOP / PAGE_SIZE)      // max userpages per task,
 // #define MAX_TASK_KER_PAGES  16       //max kernel pages per task.
 
 // 多くのファイルで必要なので mmu.h から　ここに移した
-#define VA_START    0x0
-#define VA2PA(x)    ((unsigned long)x - VA_START)           // カーネル仮想アドレスから物理アドレスに変換
-#define PA2VA(x)    ((void *)((unsigned long)x + VA_START)) // 物理アドレスからカーネル仮想アドレスに変換
+#define VA_START    0xFFFF000000000000
+#define V2P(x)    ((unsigned long)x - VA_START)           // カーネル仮想アドレスから物理アドレスに変換
+#define P2V(x)    ((void *)((unsigned long)x + VA_START)) // 物理アドレスからカーネル仮想アドレスに変換
+
+#define V2P_WO(x) ((x) - VA_START)      /* Same as V2P, but without casts */
+#define P2V_WO(x) ((x) + VA_START)      /* Same as P2V, but without casts */
+
 
 #endif

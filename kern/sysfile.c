@@ -16,6 +16,7 @@
 #include <pipe.h>
 #include <mm.h>
 #include <vm.h>
+#include <exec.h>
 //#include <filedesc.h>
 #include <linux/fcntl.h>
 #include <linux/errno.h>
@@ -309,8 +310,8 @@ int  sys_fstatat(void)
 #endif
 
 /* int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags);  */
-int  sys_linkat(int ofd, uint64_t opathp /* user va*/,
-    int nfd, uint64_t npathp /* user va*/, int flags)
+int  sys_linkat(int olddirfd, uint64_t opathp /* user va*/,
+    int newdirfd, uint64_t npathp /* user va*/, int flags)
 {
     char opath[MAXPATH], npath[MAXPATH];
     struct inode *ip;
@@ -325,13 +326,13 @@ int  sys_linkat(int ofd, uint64_t opathp /* user va*/,
     if (argstr(npathp, npath, MAXPATH) < 0)
         return -EIO;
 
-    if ((error = check_fdcwd(opath, ofd)) < 0)
+    if ((error = check_fdcwd(opath, olddirfd)) < 0)
         return error;
-    if ((error = check_fdcwd(npath, nfd)) < 0)
+    if ((error = check_fdcwd(npath, newdirfd)) < 0)
         return error;
 
     if (flags & AT_SYMLINK_FOLLOW) {
-        if ((ip = namei(opath, ofd)) == 0)
+        if ((ip = namei(opath, olddirfd)) == 0)
             return -ENOENT;
         ilock(ip);
         if (ip->type == T_SYMLINK) {
@@ -349,11 +350,11 @@ int  sys_linkat(int ofd, uint64_t opathp /* user va*/,
         return -EINVAL;
     }
 
-    return filelink(opath, ofd, npath, nfd);
+    return filelink(opath, olddirfd, npath, newdirfd);
 }
 
 //int symlinkat(const char *targetpath, int newdirfd, const char *newpath);
-ssize_t sys_symlinkat(uint64_t tpathp/* user va*/, int nfd, uint64_t npathp /* user va*/)
+ssize_t sys_symlinkat(uint64_t tpathp/* user va*/, int newdirfd, uint64_t npathp /* user va*/)
 {
     char tpath[MAXPATH], npath[MAXPATH];
     int error;
@@ -366,21 +367,21 @@ ssize_t sys_symlinkat(uint64_t tpathp/* user va*/, int nfd, uint64_t npathp /* u
     if (strncmp(tpath, "", 1) == 0 || strncmp(npath, "", 1) == 0)
         return -ENOENT;
 
-    if ((error = check_fdcwd(npath, nfd)) < 0)
+    if ((error = check_fdcwd(npath, newdirfd)) < 0)
         return error;
 
-    return filesymlink(tpath, npath, nfd);
+    return filesymlink(tpath, npath, newdirfd);
 }
 
 /* int unlinkat(int dirfd, const char *pathname, int flags); */
-int  sys_unlinkat(int fd, uint64_t pathp /* user va*/, int flags)
+int  sys_unlinkat(int dirfd, uint64_t pathp /* user va*/, int flags)
 {
     char path[MAXPATH];
     int error;
 
     if (argstr(pathp, path, MAXPATH) < 0)
         return -EIO;
-    if ((error = check_fdcwd(path, fd)) < 0)
+    if ((error = check_fdcwd(path, dirfd)) < 0)
         return error;
 
     if (flags & ~AT_REMOVEDIR)
@@ -391,11 +392,11 @@ int  sys_unlinkat(int fd, uint64_t pathp /* user va*/, int flags)
         return fat_unlink(path);
 #endif
 
-    return fileunlink(path, fd, flags);
+    return fileunlink(path, dirfd, flags);
 }
 
 /* ssize_t readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz); */
-ssize_t sys_readlinkat(int fd, uint64_t pathp/* user va*/, uint64_t bufp/* user va*/, size_t bufsize)
+ssize_t sys_readlinkat(int dirfd, uint64_t pathp/* user va*/, uint64_t bufp/* user va*/, size_t bufsize)
 {
     char path[MAXPATH];
     int error;
@@ -403,14 +404,14 @@ ssize_t sys_readlinkat(int fd, uint64_t pathp/* user va*/, uint64_t bufp/* user 
     if (argstr(pathp, path, MAXPATH) < 0)
         return -EIO;
 
-    if ((error = check_fdcwd(path, fd)) < 0)
+    if ((error = check_fdcwd(path, dirfd)) < 0)
         return error;
 
-    return filereadlink(path, fd, (char *)bufp, bufsize/* myproc()->uid */);
+    return filereadlink(path, dirfd, (char *)bufp, bufsize/* myproc()->uid */);
 }
 
 /* int renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath); */
-int sys_renameat(int ofd, uint64_t opathp/* user va*/, int nfd, uint64_t npathp/* user va*/)
+int sys_renameat(int olddirfd, uint64_t opathp/* user va*/, int newdirfd, uint64_t npathp/* user va*/)
 {
     char npath[MAXPATH], opath[MAXPATH];
     int error;
@@ -420,27 +421,27 @@ int sys_renameat(int ofd, uint64_t opathp/* user va*/, int nfd, uint64_t npathp/
     if (argstr(npathp, npath, MAXPATH) < 0)
         return -EIO;
 
-    if ((error = check_fdcwd(opath, ofd)) < 0)
+    if ((error = check_fdcwd(opath, olddirfd)) < 0)
         return error;
-    if ((error = check_fdcwd(npath, nfd)) < 0)
+    if ((error = check_fdcwd(npath, newdirfd)) < 0)
         return error;
 
-    return filerename(opath, ofd, npath, nfd);
+    return filerename(opath, olddirfd, npath, newdirfd);
 }
 
 /* int renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags); */
-int sys_renameat2(int ofd, uint64_t opathp/* user va*/,
-    int nfd, uint64_t npathp/* user va*/, int flags)
+int sys_renameat2(int olddirfd, uint64_t opathp/* user va*/,
+    int newdirfd, uint64_t npathp/* user va*/, int flags)
 {
     // muslでは RENAME_NOREPLACEもRENAME_EXCHANGEも対応していない
     if (flags)
         return -EINVAL;
 
-    return sys_renameat(ofd, opathp, nfd, npathp);
+    return sys_renameat(olddirfd, opathp, newdirfd, npathp);
 }
 
 /* int openat(int dirfd, const char *pathname, int flags, mode_t mode); */
-int sys_openat(int fd, uint64_t pathp/* user va*/, int flags, mode_t mode)
+int sys_openat(int dirfd, uint64_t pathp/* user va*/, int flags, mode_t mode)
 {
     char path[MAXPATH];
      int error;
@@ -458,14 +459,14 @@ int sys_openat(int fd, uint64_t pathp/* user va*/, int flags, mode_t mode)
         return fat_open(path, flags, mode);
 #endif
 
-    if ((error = check_fdcwd(path, fd)) < 0)
+    if ((error = check_fdcwd(path, dirfd)) < 0)
         return error;
 
-    return fileopen(path, fd, flags, mode);
+    return fileopen(path, dirfd, flags, mode);
 }
 
 // int mkdirat(int dirfd, const char *pathname, mode_t mode);
-int sys_mkdirat(int fd, uint64_t pathp/* user va*/, mode_t mode)
+int sys_mkdirat(int dirfd, uint64_t pathp/* user va*/, mode_t mode)
 {
     char path[MAXPATH];
     int error;
@@ -478,27 +479,27 @@ int sys_mkdirat(int fd, uint64_t pathp/* user va*/, mode_t mode)
         return fat_mkdir(path);
 #endif
 
-    if ((error = check_fdcwd(path, fd)) < 0)
+    if ((error = check_fdcwd(path, dirfd)) < 0)
         return error;
 #if 0
     mode = (mode & ~(myproc()->umask)) & 0777;
 #endif
 
-    if ((error = fileopen(path, fd, O_CREAT, S_IFDIR | mode)) < 0)
+    if ((error = fileopen(path, dirfd, O_CREAT, S_IFDIR | mode)) < 0)
         return error;
     fileclose(myproc()->ofile[error]);
     return 0;
 }
 
 /* int mknodat(int dirfd, const char *pathname, mode_t mode, dev_t dev); */
-int sys_mknodat(int fd, uint64_t pathp/* user va*/, mode_t mode, dev_t dev)
+int sys_mknodat(int dirfd, uint64_t pathp/* user va*/, mode_t mode, dev_t dev)
 {
     char path[MAXPATH];
     int error;
 
     if (argstr(pathp, path, MAXPATH) < 0)
         return -EIO;
-    if ((error = check_fdcwd(path, fd)) < 0)
+    if ((error = check_fdcwd(path, dirfd)) < 0)
         return error;
 
     return filemknod(path, mode, (device_t)dev);
@@ -524,7 +525,6 @@ int sys_chdir(uint64_t pathp/* user va*/)
     return filechdir(path);
 }
 
-// TODO: 次はここから
 /*  int execve(const char *filename, char *const argv[], char *const envp[]); */
 int sys_execve(uint64_t pathp/* user va*/, uint64_t argvp/* user va*/, uint64_t envpp/* user va*/)
 {
@@ -604,7 +604,7 @@ int sys_execve(uint64_t pathp/* user va*/, uint64_t argvp/* user va*/, uint64_t 
         envc = 0;
     }
 
-    error = execve(path, argv, envp, argc, envc);
+    error = exec(path, argv, envp);
     for (int i = 0; i < argc; i++) {
         kmfree(argv[i]);
     }
@@ -628,7 +628,6 @@ bad:
 int sys_pipe2(uint64_t pipefdp/* user va*/, int flags)
 {
     int fd0, fd1;
-    uint64_t fdary;
     struct file *rf, *wf;
     struct task_struct *p = myproc();
 
@@ -637,10 +636,10 @@ int sys_pipe2(uint64_t pipefdp/* user va*/, int flags)
         return -EINVAL;
     }
 
-    if (pipealloc(&rf, &wf, flags) < 0)
+    if (pipealloc(&rf, &wf) < 0)
         return -ENFILE;
 
-    if ((fd0 = fdalloc(rf, 0)) < 0 || (fd1 < fdalloc(wf, 0)) < 0) {
+    if ((fd0 = fdalloc(rf, 0)) < 0 || (fd1 = fdalloc(wf, 0)) < 0) {
         if (fd0 >= 0) {
             p->ofile[fd0] = 0;
         }
@@ -649,8 +648,8 @@ int sys_pipe2(uint64_t pipefdp/* user va*/, int flags)
         return -EMFILE;
     }
 
-    if ((copyout(p->mm, fdary, (char *)&fd0, sizeof(fd0)) < 0)
-     || (copyout(p->mm, fdary + sizeof(fd0), (char *)&fd1, sizeof(fd1)) < 0)) {
+    if ((copyout(p->mm, pipefdp, (char *)&fd0, sizeof(fd0)) < 0)
+     || (copyout(p->mm, pipefdp + sizeof(fd0), (char *)&fd1, sizeof(fd1)) < 0)) {
         p->ofile[fd0] = 0;
         p->ofile[fd1] = 0;
 #if 0

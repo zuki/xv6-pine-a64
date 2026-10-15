@@ -16,6 +16,8 @@
 #include <utils.h>
 #include <mmu.h>
 #include <sched.h>
+#include <vm.h>
+#include <console.h>
 
 #undef CONFIG_KRETPROBES
 
@@ -55,8 +57,6 @@
 ({                      \
     __READ_ONCE(x);     \
 })
-
-#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 // fxl ... move it somewhere
 /**
@@ -249,7 +249,7 @@ struct kunwind_state {
 #endif
 };
 
-static __always_inline void kunwind_init(struct kunwind_state *state,
+static inline void kunwind_init(struct kunwind_state *state,
          struct task_struct *task)
 {
     unwind_init_common(&state->common);
@@ -263,7 +263,7 @@ static __always_inline void kunwind_init(struct kunwind_state *state,
  *
  * The regs must be on a stack currently owned by the calling task.
  */
-static __always_inline void kunwind_init_from_regs(struct kunwind_state *state,
+static void inline kunwind_init_from_regs(struct kunwind_state *state,
                struct trapframe *regs)
 {
     kunwind_init(state, myproc());
@@ -280,7 +280,7 @@ static __always_inline void kunwind_init_from_regs(struct kunwind_state *state,
  *
  * The function which invokes this must be noinline.
  */
-static __always_inline void kunwind_init_from_caller(struct kunwind_state *state)
+static inline void kunwind_init_from_caller(struct kunwind_state *state)
 {
     kunwind_init(state, myproc());
 
@@ -306,7 +306,7 @@ static __always_inline void kunwind_init_from_caller(struct kunwind_state *state
  * duration of the unwind, or the unwind will be bogus. It is never valid to
  * call this for the current task.
  */
-static __always_inline void kunwind_init_from_task(struct kunwind_state *state,
+static inline void kunwind_init_from_task(struct kunwind_state *state,
                struct task_struct *task)
 {
     kunwind_init(state, task);
@@ -316,7 +316,7 @@ static __always_inline void kunwind_init_from_task(struct kunwind_state *state,
 }
 
 // fxl: what's this for?? recover return addr to state->common.pc??
-static __always_inline int kunwind_recover_return_address(struct kunwind_state *state)
+static inline int kunwind_recover_return_address(struct kunwind_state *state)
 {
 #ifdef CONFIG_FUNCTION_GRAPH_TRACER
     if (state->task->ret_stack &&
@@ -351,7 +351,7 @@ static __always_inline int kunwind_recover_return_address(struct kunwind_state *
  * records (e.g. a cycle), determined based on the location and fp value of A
  * and the location (but not the fp value) of B.
  */
-static __always_inline int kunwind_next(struct kunwind_state *state)       // fxl: this seems the core func
+static inline int kunwind_next(struct kunwind_state *state)       // fxl: this seems the core func
 {
     struct task_struct *tsk = state->task;
     unsigned long fp = state->common.fp;
@@ -373,7 +373,7 @@ static __always_inline int kunwind_next(struct kunwind_state *state)       // fx
 
 typedef bool (*kunwind_consume_fn)(const struct kunwind_state *state, void *cookie);
 
-static __always_inline void do_kunwind(struct kunwind_state *state, kunwind_consume_fn consume_state,
+static inline void do_kunwind(struct kunwind_state *state, kunwind_consume_fn consume_state,
        void *cookie)
 {
     if (kunwind_recover_return_address(state))
@@ -419,7 +419,7 @@ static __always_inline void do_kunwind(struct kunwind_state *state, kunwind_cons
             : stackinfo_get_unknown();          \
     })
 
-static __always_inline void kunwind_stack_walk(kunwind_consume_fn consume_state,
+static inline void kunwind_stack_walk(kunwind_consume_fn consume_state,
            void *cookie, struct task_struct *task,
            struct trapframe *regs)
 {
@@ -465,7 +465,7 @@ struct kunwind_consume_entry_data {
 };
 
 // fxl: invoke the callback
-static __always_inline bool arch_kunwind_consume_entry(const struct kunwind_state *state, void *cookie)
+static inline bool arch_kunwind_consume_entry(const struct kunwind_state *state, void *cookie)
 {
     struct kunwind_consume_entry_data *data = cookie;
     return data->consume_entry(data->cookie, state->common.pc);
@@ -488,10 +488,10 @@ noinline noinstr void arch_stack_walk(stack_trace_consume_fn consume_entry,
 static bool dump_backtrace_entry(void *arg, unsigned long where)
 {
     // char *loglvl = arg;
-    // printf("%s %pSb\n", loglvl, (void *)where); // fxl: this also prints symbol name?
-    // printf("%s 0x%lx\n", loglvl, where);
-    // printf("0x%lx \\ \n", where);
-    printf("0x%lx \\ \n", where-4); // prev insn?
+    // cprintf("%s %pSb\n", loglvl, (void *)where); // fxl: this also prints symbol name?
+    // cprintf("%s 0x%lx\n", loglvl, where);
+    // cprintf("0x%lx \\ \n", where);
+    cprintf("0x%lx \\ \n", where-4); // prev insn?
     return true;
 }
 
@@ -500,7 +500,7 @@ static bool dump_backtrace_entry(void *arg, unsigned long where)
 void dump_backtrace(struct trapframe *regs, struct task_struct *tsk,
             const char *loglvl)
 {
-    printf("%s(regs = %p tsk = %p)\n", __func__, regs, tsk);
+    cprintf("%s(regs = %p tsk = %p)\n", __func__, regs, tsk);
 
     // if (regs && user_mode(regs))
     //     return;
@@ -511,11 +511,11 @@ void dump_backtrace(struct trapframe *regs, struct task_struct *tsk,
     // if (!try_get_task_stack(tsk))
     //     return;
 
-    printf("%s cpu %d call trace:\n", __func__, cpuid());
+    cprintf("%s cpu %d call trace:\n", __func__, cpuid());
 #ifdef PLAT_RPI3QEMU
-    printf("addr2line -e ./kernel/build-rpi3qemu/kernel8.elf \\ \n");
+    cprintf("addr2line -e ./kernel/build-rpi3qemu/kernel8.elf \\ \n");
 #else
-    printf("addr2line -e ./kernel/build-rpi3/kernel8.elf \\ \n");
+    cprintf("addr2line -e ./kernel/build-rpi3/kernel8.elf \\ \n");
 #endif
     arch_stack_walk(dump_backtrace_entry, (void *)loglvl, tsk, regs);
 
@@ -595,9 +595,9 @@ static void arch_stack_walk_user(stack_trace_consume_fn consume_entry, void *coo
 void show_stack_user(void) {
     struct trapframe *p = task_pt_regs(myproc());
 
-    printf("%s: Call trace (pid %d %s):\n", __func__,
+    cprintf("%s: Call trace (pid %d %s):\n", __func__,
         myproc()->pid, myproc()->name);
-    printf("addr2line -e ./usr/build/%s.debug \\ \n", myproc()->name);
+    cprintf("addr2line -e ./usr/build/%s.debug \\ \n", myproc()->name);
     arch_stack_walk_user(dump_backtrace_entry, 0/*cookie*/,p);
 
     __asm volatile ("" ::: "memory");

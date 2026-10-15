@@ -140,4 +140,6 @@ static inline int list_length(const struct list_head *list) {
         &item->member != (head);                                         \
         item = temp, temp = container_of(item->member.next, typeof(*temp), member))
 
+#endif      // __ASSEMBLER__
+
 #endif

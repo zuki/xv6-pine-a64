@@ -18,7 +18,7 @@
 #include <peripherals/gpio.h>
 #include <mmc.h>
 #include <sunxi_mmc.h>
-#include <kalloc.h>
+#include <mm.h>
 #include <linux/errno.h>
 #include <console.h>
 #include <timer.h>
@@ -53,8 +53,8 @@ struct sunxi_mmc_priv {
 static struct sunxi_mmc_priv mmc_priv;
 static struct mmc_config mmc_config;
 
-#define sunxi_get32(r)          (get32((uintptr_t)(r)))
-#define sunxi_put32(r, v)       (put32((uintptr_t)(r), (v)))
+#define sunxi_get32(r)          (get32((uint32_t *)(uintptr_t)(r)))
+#define sunxi_put32(r, v)       (put32((uint32_t *)(uintptr_t)(r), (v)))
 
 /*
  * A64以降のすべてのMMCコントローラは、自動キャリブレーション
@@ -418,7 +418,7 @@ out:
 
     sunxi_put32(&priv->reg->rint, 0xffffffff);
     sunxi_put32(&priv->reg->gctrl, sunxi_get32(&priv->reg->gctrl) | SUNXI_MMC_GCTRL_FIFO_RESET);
-    delayus(1000);
+    delay_us(1000);
 
     return error;
 }
@@ -510,7 +510,7 @@ int sunxi_mmc_probe(struct mmc *mmc)
 
     /* コントローラをリセットする */
     sunxi_put32(&priv->reg->gctrl, SUNXI_MMC_GCTRL_RESET);
-    delayus(1000);
+    delay_us(1000);
 
     trace("SMHC_CNTL: %x", sunxi_get32(&priv->reg->gctrl));
 

@@ -122,7 +122,7 @@ void *allocate_user_page_mm(struct mm_struct *mm, uint64_t va, uint64_t perm)
     }
 
     if (map_page(mm, va, (uint64_t)page, 1, perm)) {
-        return PA2VA(page);
+        return P2V(page);
     } else {
         error("map_page failed: va=0x%lx, pa=0x%lx, perm=0x%lx", va, page, perm);
         return 0;
@@ -205,7 +205,7 @@ uint64_t *map_page(struct mm_struct *mm, uint64_t va, uint64_t page, int alloc, 
 
     for (int i = 1; i < 4; i++) {
         allocated = alloc;
-        table = map_table(PA2VA(table), shifts[i], va, &allocated, &desc);
+        table = map_table(P2V(table), shifts[i], va, &allocated, &desc);
         if (table) {
             if (allocated) {
                 ker_pages[i] = table;
@@ -227,7 +227,7 @@ uint64_t *map_page(struct mm_struct *mm, uint64_t va, uint64_t page, int alloc, 
         }
     }
 
-    uint64_t *pte_va = map_table_entry(PA2VA(table), va, page, perm);
+    uint64_t *pte_va = map_table_entry(P2V(table), va, page, perm);
     if (page) {
         assert(mm->user_pages_count < MAX_TASK_USER_PAGES);
         mm->user_pages_count++;
@@ -270,7 +270,7 @@ int dup_current_virt_memory(struct mm_struct *dstmm)
     }
 
     // ユーザスタックをコピーする
-    for (uint64_t i = PGROUNDDOWN(regs->sp); i < USER_VA_END; i += PAGE_SIZE) {
+    for (uint64_t i = PGROUNDDOWN(regs->sp); i < USER_TOP; i += PAGE_SIZE) {
         uint64_t *pte = map_page(srcmm, i, 0, 0, 0);
         assert(pte);
         void *kernel_va = allocate_user_page_mm(dstmm, i, MM_AP_RW | MM_XN);
@@ -311,7 +311,7 @@ int copyout(struct mm_struct *mm, uint64_t dstva, char *src, uint64_t len)
 {
     uint64_t n, va0, pa0;
 
-    if (dstva > USER_VA_END) {
+    if (dstva > USER_TOP) {
         error("illegal user va. a kernel va??");
         return -1;
     }
@@ -326,7 +326,7 @@ int copyout(struct mm_struct *mm, uint64_t dstva, char *src, uint64_t len)
         }
         n = PAGE_SIZE - (dstva - va0);
         if (n > len) n = len;
-        memmove(PA2VA(pa0 + (dstva - va0)), src, n);
+        memmove(P2V(pa0 + (dstva - va0)), src, n);
 
         len -= n;
         src += n;
@@ -342,7 +342,7 @@ int copyin(struct mm_struct *mm, char *dst, uint64_t srcva, uint64_t len)
 {
    uint64_t n, va0, pa0;
 
-    if (srcva > USER_VA_END) {
+    if (srcva > USER_TOP) {
         error("illegal user va. a kernel va??");
         return -1;
     }
@@ -357,7 +357,7 @@ int copyin(struct mm_struct *mm, char *dst, uint64_t srcva, uint64_t len)
         }
         n = PAGE_SIZE - (srcva - va0);
         if (n > len) n = len;
-        memmove(dst, PA2VA(pa0 + (srcva - va0)), n);
+        memmove(dst, P2V(pa0 + (srcva - va0)), n);
 
         len -= n;
         dst += n;
@@ -374,7 +374,7 @@ int copyinstr(struct mm_struct *mm, char *dst, uint64_t srcva, uint64_t max)
     uint64_t n, va0, pa0;
     int got_null = 0;
 
-    if (srcva > USER_VA_END) {
+    if (srcva > USER_TOP) {
         error("illegal user va. a kernel va??");
         return -1;
     }
@@ -390,7 +390,7 @@ int copyinstr(struct mm_struct *mm, char *dst, uint64_t srcva, uint64_t max)
         n = PAGE_SIZE - (srcva - va0);
         if (n > max) n = max;
 
-        char *p = (char *)PA2VA(pa0 + (srcva - va0));
+        char *p = (char *)P2V(pa0 + (srcva - va0));
         while (n > 0) {
             if (*p == '\0') {
                 *dst = '\0';
@@ -497,7 +497,7 @@ uint64_t growproc(struct mm_struct *mm, int incr)
         goto bad;
     }
 
-    if (incr > 0 && sz + incr >= USER_VA_END) {
+    if (incr > 0 && sz + incr >= USER_TOP) {
         error("incr too large: sz 0x%lx (%ld), incr %d. req new brk 0x%lx",
             sz, sz, incr, sz + incr);
         goto bad;
@@ -537,9 +537,9 @@ int do_mem_abort(uint64_t addr, uint64_t esr, uint64_t elr)
     __attribute__((unused)) struct trapframe *regs = task_pt_regs(p);
     uint64_t dfs = (esr & 0b111111);
 
-    if (addr > USER_VA_END) {
-        error("bad user va? faulty addr 0x%lx > USER_VA_END 0x%x\n"
-              "esr 0x%lx, elr 0x%lx", addr,USER_VA_END, esr, elr);
+    if (addr > USER_TOP) {
+        error("bad user va? faulty addr 0x%lx > USER_TOP 0x%x\n"
+              "esr 0x%lx, elr 0x%lx", addr,USER_TOP, esr, elr);
         goto bad;
     }
     if ((dfs & 0b111100) == 0b100) {

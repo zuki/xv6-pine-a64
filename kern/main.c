@@ -23,6 +23,10 @@ int core_flags[NCPU] = { 0 };
 extern uint64_t _bss_start;
 extern uint64_t _bss_end;
 
+extern uint64_t user_begin;
+extern uint64_t user_end;
+extern void user_process();
+
 // PSCIを呼び出すアセンブリラッパー
 static int psci_cpu_on(unsigned long cpuid, unsigned long entry_point, unsigned long context) {
     register unsigned long r0 asm("x0") = PSCI_0_2_FN64_CPU_ON;
@@ -39,6 +43,20 @@ static int psci_cpu_on(unsigned long cpuid, unsigned long entry_point, unsigned 
     return r0; // 0が返ってくれば成功
 }
 
+// initで起動されるカーネルスレッドの本体
+void kernel_process(void)
+{
+    uint64_t begin = (uint64_t)&user_begin;
+    uint64_t end   = (uint64_t)&user_end;
+    uint64_t process = (uint64_t)&user_process;
+
+    int err = move_to_user_mode(begin, end - begin, process - begin);
+    if (err < 0) {
+        error("Error while moving process to user mode");
+    } else {
+        info("move_to_user_mode ok");
+    }
+}
 
 static void start_secondary_cores(void)
 {
@@ -89,8 +107,6 @@ void main(void)
     asm volatile("isb" : : : "memory");
 #endif
 
-
-
     // bssの初期化
     uint64_t *bss = &_bss_start;
     while (bss < &_bss_end) {
@@ -99,18 +115,22 @@ void main(void)
 
     // カーネルページアドレスをkpgrに再セット
     set_kpgdir();
-
-    alloc_init();
+    console_init();
+    info("console ok");
+    mm_init();
+    sched_init();
     irq_init_gicd();
     irq_init_gicc(0);
-    console_init();
     clock_init();
+    binit();
+    iinit();
+    fileinit();
     sd_init();
     rtc_init();
     start_secondary_cores();
     enable_irq();
     timer_init(0);       // ap
-
+    schedule();
 
 #if 0
     // 同期エラーを発生させてtrapが発生するかチェック -> voctorsのメモリ設定の修正で発生
@@ -135,7 +155,9 @@ void main(void)
 
 #endif
 
-    while (1) ;
+    while (1) {
+        asm volatile("wfi");
+    }
 }
 
 void secondary_main(int core)
@@ -155,4 +177,22 @@ void secondary_main(int core)
     while (1)
         ;
 
+}
+
+// (アイドル以外の）最初のタスク, sched_init()で作成される
+void init(int arg)
+{
+    int wpid;
+
+    int res = copy_process(PF_KTHREAD, (uint64_t)&kernel_process, 0, "kern-1");
+    assert(res >= 0);
+
+    while (1) {
+        wpid = wait4(0, 0, 0, 0);
+        if (wpid < 0) {
+            panic("init: wait failed with %d", wpid);
+        } else {
+            info("wait returns pid=%d", wpid);
+        }
+    }
 }

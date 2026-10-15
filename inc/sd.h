@@ -3,6 +3,7 @@
 
 #include <types.h>
 #include <buf.h>
+#include <file.h>
 
 #define PARTITIONS      4       // 最大パーティション数
 #define SECTOR_SIZE     512     // セクタサイズ（バイト）
@@ -59,9 +60,10 @@ static inline uint32_t fs_lba(int  dev)
 }
 
 void sd_init(void);
+void sd_intr(void);
 // startからclkcnt個のブロックが同一パーティションに含まれる場合trueを返す
 bool check_block_range(lbaint_t start, lbaint_t blkcnt);
-
 void sd_rw(struct buf *b);
+void sd_flush(void);
 
 #endif

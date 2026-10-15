@@ -7,7 +7,7 @@
 struct trapframe {
     uint64_t regs[31];
     uint64_t sp, pc, pstate;
-    uint64_t stackfarme[2];     // 巻き戻し用
+    uint64_t stackframe[2];     // 巻き戻し用
 };
 
 void trap(struct trapframe *);

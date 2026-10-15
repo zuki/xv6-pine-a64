@@ -3,15 +3,10 @@
 #include <mmc.h>
 #include <list.h>
 #include <spinlock.h>
-//#include <buf.h>
+#include <buf.h>
 #include <console.h>
 #include <string.h>
-
-#if 0
-// FIXME: sched.cでsleep/wakeupを実装したら削除
-extern void sleep(void *chan, struct spinlock *lk);
-extern void wakeup(void *chan);
-#endif
+#include <sched.h>
 
 static struct mmc sd0;
 static struct list_head sdque;
@@ -21,12 +16,11 @@ struct partition_info ptinfo[PARTITIONS];
 // 使用中のパーティション数
 static int ptnum = 0;
 
-#if 0
 static void sd_sleep(void *chan)
 {
     sleep(chan, &sdlock);
 }
-#endif
+
 
 /*
  * Initialize SD card and parse MBR.
@@ -84,14 +78,12 @@ bool check_block_range(lbaint_t start, lbaint_t blkcnt)
     return false;
 }
 
-#if 0
 void sd_intr(void)
 {
     acquire(&sdlock);
     wakeup(&sd0);
     release(&sdlock);
 }
-
 
 /*
  * SDカードのリクエスト処理を開始する.
@@ -147,4 +139,3 @@ void sd_flush(void)
     sd_start();
     release(&sdlock);
 }
-#endif

@@ -81,6 +81,8 @@ static uint64_t get_timer_masked(void)
 uint64_t get_timer(uint64_t base)
 {
     return get_timer_masked() - base;
+}
+
 void delay_ms(uint32_t ms)
 {
     delay(CYCLEPERMS * ms);
@@ -92,7 +94,7 @@ void delay_us(uint32_t us)
 }
 
 /* タイマーリストに追加し、発火時間を再計算する */
-static inline void internal_add_timer(struct timer_list *timer)
+static void internal_add_timer(struct timer_list *timer)
 {
     //割り込み禁止（trap.c）&& timerlockを保持
 
@@ -145,7 +147,7 @@ void free_timer(struct timer_list *timer) {
 }
 
 /* タイマーを登録から外す */
-static inline void detach_timer(struct timer_list *timer)
+static void detach_timer(struct timer_list *timer)
 {
     if (!timer_pending(timer))  // 未登録
         return;

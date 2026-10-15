@@ -227,6 +227,10 @@ int sys_wait4(int pid, uint64_t statusp/* uva */, int options, uint64_t rusagep/
     if ((error = argptr(rusagep, (char *)&rusage, sizeof(rusage))) < 0)
         return error;
 
+    if (options) {
+        error("options are not supported");
+        return -EINVAL;
+    }
     return wait4(pid, &status, options, &rusage);
 }
 

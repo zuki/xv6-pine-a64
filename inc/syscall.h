@@ -10,7 +10,7 @@
 #define MAXARG      32
 #define MAXENV      64
 
-typedef long (*func)();
+typedef int (*func)();
 
 // kern/syscall.c
 int in_user(uint64_t addr, size_t n);
@@ -37,7 +37,6 @@ int sys_exit_group(int status);
 int sys_exit(int status);
 int sys_wait4(int pid, uint64_t statusp, int options, uint64_t rusagep);
 
-#if 0
 int sys_rt_sigprocmask(void);
 int sys_rt_sigsuspend(void);
 int sys_rt_sigaction(void);
@@ -76,7 +75,6 @@ int sys_mprotect(void);
 int sys_madvise(void);
 int sys_getitimer(void);
 int sys_setitimer(void);
-#endif
 
 // kern/sysfile.c
 int sys_dup(int fd);
@@ -106,7 +104,6 @@ int sys_ioctl(int fd, uint64_t req, uint64_t argp);
 int sys_fcntl(int fd, int cmd, int args);
 int sys_getdents64(int fd, uint64_t dirp, size_t count);
 
-#if 0
 int sys_fstatat(void);
 int sys_fsync(void);
 int sys_fdatasync(void);
@@ -123,9 +120,7 @@ int sys_utimensat(void);
 int sys_pread64(void);
 //int dirunlink(struct inode *, char *, uint32_t);
 //int direntlookup(struct inode *, int, struct dirent *);
-#endif
 
-#if 0
 // syssocket.c
 int sys_socket(void);
 int sys_connect(void);
@@ -137,6 +132,5 @@ int sys_send(void);
 int sys_recvfrom(void);
 int sys_sendto(void);
 int sys_dns(void);
-#endif
 
 #endif

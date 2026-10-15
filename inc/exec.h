@@ -20,7 +20,7 @@
 #define ELF_EXEC_PAGESIZE   4096
 #define BINPRM_BUF_SIZE     128
 
-#define BAD_ADDR(x)         ((uint64_t)(x) > USERTOP)
+#define BAD_ADDR(x)         ((uint64_t)(x) > USER_TOP)
 // AUXVの個数
 #define ELF_CHECK_ARCH(x)   ((x)->machine == EM_AARCH64)
 
@@ -40,5 +40,7 @@
 #define elf_addr_t          uint64_t
 #define elf_caddr_t         char *
 #endif
+
+int exec(char *path, char *argv[], char *envp[]);
 
 #endif

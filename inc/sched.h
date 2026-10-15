@@ -145,7 +145,7 @@ void timer_tick(void);
 int wakeup(void *chan);
 void sleep(void *chan, struct spinlock *lk);
 int wait4(int pid, int *status, int options, struct rusage *rusage);
-int wait(uint64_t addr);
+//int wait(uint64_t addr);
 void exit_process(int status);
 int kill(int pid);
 void setkilled(struct task_struct *p);

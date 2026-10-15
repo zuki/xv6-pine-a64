@@ -18,14 +18,12 @@
 #include <buf.h>
 #include <file.h>
 //#include <sd.h>
+#include <vm.h>
 #include <console.h>
-#include <errno.h>
 #include <linux/time.h>
+#include <linux/errno.h>
 //#include <linux/capability.h>
 
-// TODO: vfs
-// ディスク装置1台につき1つスーパーブロックがあるはずだが
-// 我々は1台の装置しか使っていない。
 struct superblock sb;
 
 // in discv-cache.c
@@ -471,6 +469,7 @@ static uint32_t bmap(struct inode *ip, uint32_t bn)
         return addr;
     }
     panic("bmap: out of range");
+    return -1;
 }
 
 // Truncate inode (discard contents).
@@ -549,7 +548,7 @@ void stati(struct inode *ip, struct stat *st)
     st->st_ctime   = ip->ctime;
 #endif
     if (ip->type == T_DEVICE)
-        st->st_rdev = mkdev(ip->major, ip->minor);
+        st->st_rdev = makedev(ip->major, ip->minor);
 
     st->st_mode = ip->mode;
 }
@@ -878,7 +877,7 @@ int iunlink(struct inode *dp, struct inode *ip, int flags)
     disb();
 
     //while (dirlookup(dp, name, 0) != 0)     // ファイルが削除されるのを待つ
-    //    delayus(100);
+    //    delay_us(100);
 
     if (ok) {
         if (ip->type == T_DIR) {

@@ -32,6 +32,13 @@ struct page *pages;
 
 /**
  * @ingroup mm
+ * @var paging_pages_used
+ * @brief 使用済みページ数（meminfo用）
+ */
+unsigned paging_pages_used = 0;
+
+/**
+ * @ingroup mm
  * @brief ページシステムを初期化する.
  */
 void mm_init(void) {
@@ -143,11 +150,10 @@ void kfree(void *va)
         return;
     struct page *page = page_find_by_address(va);
     if (page) {
-        if ((uint64_t)va == 0xffff000000bfd000) {
-            debug("page->ref: %d", page->ref);
-        }
-        if (--page->ref <= 0)
+        if (--page->ref <= 0) {
+            paging_pages_used -= (1 << page->order);
             buddy_free(page);
+        }
     } else {
         error("no page at %p", va);
     }
@@ -164,6 +170,7 @@ void *kalloc(size_t num)
 {
     struct page *page = buddy_alloc(num * PGSIZE);
     page->ref = 1;
+    paging_pages_used += num;
     // return page_address(page);
     void *addr = page_address(page);
     trace("addr: 0x%p", addr);

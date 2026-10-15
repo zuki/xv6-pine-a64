@@ -25,7 +25,7 @@ limitations under the License.
 #include <spinlock.h>
 #include <string.h>
 
-extern char end[]; // linker.ldで定義されているカーネル後の最初のアドレス
+extern char kernel_end[]; // linker.ldで定義されているカーネル後の最初のアドレス
 
 struct spinlock buddy_lock;
 
@@ -150,9 +150,9 @@ void buddy_init(void) {
     int i, len, max_page_block = (1 << PAGE_MAX_ORDER); // 1024 = 2^10
 
     /* FIXME: PAGE_STARTを固定値で与えているので、カーネル機能が増えるにつれて
-     * endがPAGE_STARTを超える可能性がある */
-    trace("end: 0x%llx, space: 0x%llx", end, PAGE_START - end);
-    if (end > PAGE_START)
+     * kernel_endがPAGE_STARTを超える可能性がある */
+    trace("kernel_end: 0x%llx, space: 0x%llx", kernel_end, PAGE_START - kernel_end);
+    if (kernel_end > PAGE_START)
         panic("fix PAGE_START");
 
     /* 1. buddyシステムのロックを初期化 */

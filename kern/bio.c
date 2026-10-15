@@ -17,13 +17,13 @@
 #include <param.h>
 #include <spinlock.h>
 #include <sleeplock.h>
-#include <riscv.h>
-#include <defs.h>
+#include <mm.h>
+#include <slab.h>
 #include <fs.h>
 #include <buf.h>
-#include <printf.h>
+#include <console.h>
 #include <memalign.h>
-#include <fs.h>
+#include <sd.h>
 
 static struct slab_cache *BUFDATA;
 
@@ -103,6 +103,7 @@ loop:
         error("buf[%d]: bn: %d, bvd: %d%d%d", i, bcache.buf[i].blockno, (f % B_BUSY) ? 1 : 0, (f % B_VALID) ? 1 : 0, (f % B_DIRTY) ? 1 : 0 )
     }
     panic("bget: no buffers");
+    return 0;
 }
 
 // 指定したブロック(ファイルシステムの先頭からの相対番号）のデータを
