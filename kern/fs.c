@@ -189,6 +189,7 @@ void iinit()
     for (i = 0; i < NINODE; i++) {
         initsleeplock(&itable.inode[i].lock, "inode");
     }
+    info("iinit ok");
 }
 
 static struct inode* iget(uint32_t dev, uint32_t inum);
@@ -237,8 +238,7 @@ void iupdate(struct inode *ip)
     bp = bread(ip->dev, IBLOCK(ip->inum, sb));
     dip = (struct dinode*)bp->data + ip->inum%IPB;
     dip->type = ip->type;
-    dip->major = ip->major;
-    dip->minor = ip->minor;
+    dip->devno = ip->devno;
     dip->nlink = ip->nlink;
     dip->size = ip->size;
     dip->mode  = ip->mode;
@@ -317,8 +317,7 @@ void ilock(struct inode *ip)
         bp = bread(ip->dev, IBLOCK(ip->inum, sb));
         dip = (struct dinode*)bp->data + ip->inum%IPB;
         ip->type = dip->type;
-        ip->major = dip->major;
-        ip->minor = dip->minor;
+        ip->devno = dip->devno;
         ip->nlink = dip->nlink;
         ip->size = dip->size;
         ip->mode  = dip->mode;
@@ -548,7 +547,7 @@ void stati(struct inode *ip, struct stat *st)
     st->st_ctime   = ip->ctime;
 #endif
     if (ip->type == T_DEVICE)
-        st->st_rdev = makedev(ip->major, ip->minor);
+        st->st_rdev = ip->devno;
 
     st->st_mode = ip->mode;
 }

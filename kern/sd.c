@@ -66,7 +66,7 @@ void sd_init(void)
         ptnum++;
     }
 
-    info("sd_init ok\n");
+    info("sd_init ok");
 }
 
 bool check_block_range(lbaint_t start, lbaint_t blkcnt)

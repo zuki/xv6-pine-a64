@@ -1,7 +1,5 @@
 # for user threads (compiled as part of the kernel code)  to make syscalls
 
-.section ".text.user"
-
 #include "linux/syscall.h"
 
 .globl call_sys_write
@@ -15,7 +13,6 @@
     mov x8, #SYS_execve
     svc #0
     ret
-
 
 .globl call_sys_open
   call_sys_open:
@@ -33,5 +30,11 @@
 .globl call_sys_dup
     call_sys_dup:
     mov x8, #SYS_dup
+    svc #0
+    ret
+
+.globl call_sys_exit
+    call_sys_exit:
+    mov x8, #SYS_exit
     svc #0
     ret

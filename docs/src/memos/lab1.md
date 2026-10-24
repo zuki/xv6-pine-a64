@@ -187,3 +187,78 @@ Starting kernel ...
 
 hello, world
 ```
+
+## mkimageコマンドについて
+
+```bash
+$ brew info u-boot-tools
+==> u-boot-tools ↑: 2025.07 → stable 2026.07 (bottled)
+Universal boot loader
+https://www.denx.de/wiki/U-Boot/
+Installed (on request)
+From: https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/u/u-boot-tools.rb
+License: GPL-2.0-only AND GPL-2.0-or-later AND BSD-3-Clause
+==> Installed Versions
+u-boot-tools ↑ 2025.07 → 2026.07 (7 files, 826.7KB) [Linked]
+==> Dependencies
+Required (1): openssl@3 ↑
+Recursive Runtime (2): all installed ✔
+==> Downloading https://formulae.brew.sh/api/formula/u-boot-tools.json
+==> Analytics
+install: 181 (30 days), 390 (90 days), 1,661 (365 days)
+install-on-request: 181 (30 days), 390 (90 days), 1,661 (365 days)
+build-error: 2 (30 days)
+$ ls /opt/homebrew/Cellar/u-boot-tools/2025.07/bin
+dumpimage  mkimage
+```
+### man 1 mkimage
+
+#### 名前
+
+    mkimage - generate images for U-Boot
+
+#### 書式
+
+    mkimage 	[-T type] -l image-file-name
+    mkimage 	[option ...] [-T type] image-file-name
+    mkimage 	[option ...] -f image-tree-source-file|auto|auto-conf image-file-name
+    mkimage 	[option ...] -F image-file-name
+
+#### 説明
+
+**mkimage** コマンドはU-Bootブートローダで使用するイメージの作成に使用されます。
+これらのイメージには、Linuxカーネル、デバイスツリーBLOB、ルートファイルシステムイメージ、
+ファームウェアイメージなどが、個別に、あるいは組み合わせて含めることができます。
+
+**mkimage** は多くのイメージ形式をサポートしています。これらの形式の中には組み込み
+ブートファームウェアがU-Bootをロードするために使用されるものもあります。他の形式は
+U-BootがLinux（やその他のカーネル）をロードするために使用されます。
+
+従来のイメージ形式は個々の構成要素（たとえば、カーネルイメージ、デバイスツリー BLOB、
+ramdiskイメージなど）を連結し、ターゲットアーキテクチャ、オペレーティングシステム、
+イメージタイプ、圧縮方式、エントリポイント、タイムスタンプ、チェックサムなどの情報を含む
+64バイトのヘッダーを追加します。
+
+新しい*FIT*（Flattened Image Tree）形式は、さまざまな種類のイメージをより柔軟に
+扱うことができ、さらに、より強力なチェックサムによりイメージの整合性保護を強化します。
+また、検証済みブートもサポートしています。
+
+### man 1 dumpimage
+
+#### 名前
+
+    dumpimage - extract data from U-Boot images
+
+#### 書式
+
+    dumpimage 	[-T type] -l image
+    dumpimage 	[-T type] [-p position] -o outfile image
+    dumpimage 	-h
+    dumpimage 	-V
+
+#### 説明
+
+**dumpimage** はU-Boot*イメージ*の一覧を表示し、そこからデータを抽出します。
+**-l** オプションを指定すると、**dumpimage** は*イメージ*内のコンポーネントの
+一覧を表示します。それ以外の場合は、**dumpimage** は指定された位置にある
+コンポーネントを *outfile* へ抽出します。

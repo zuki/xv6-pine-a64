@@ -50,19 +50,18 @@ struct superblock {
 
 // ディスク上のinode構造体(128バイト)
 struct dinode {
-    short type;                 // ファイルタイプ
-    short major;                // メジャーデバイス番号 (T_DEVICE only)
-    short minor;                // マイナーデバイス番号 (T_DEVICE only)
-    short nlink;                // inodeへのリンク数
-    uint32_t size;              // ファイルサイズ（バイト単位）(bytes)
-    mode_t mode;                // ファイルモード
-    uid_t  uid;                 // 所有者のユーザーID
-    gid_t  gid;                 // 所有者のグループID
-    struct timespec atime;      // 最新アクセス日時
-    struct timespec mtime;      // 最新更新日時
-    struct timespec ctime;      // 作成日時
-    uint32_t addrs[NDIRECT+2];  // データブロックのアドレス
-    char _dummy[4];
+    uint16_t            type;       //  0: V6ファイルタイプ : T_XXX
+    uint16_t            nlink;      //  2: ハードリンク数
+    device_t            devno;      //  4:デバイス番号
+    uint32_t            size;       //  8: Size of file (bytes)
+    mode_t              mode;       // 12: file mode
+    uid_t               uid;        // 16: owner's user id
+    gid_t               gid;        // 20: owner's gropu id
+    struct timespec     atime;      // 24: last accessed time
+    struct timespec     mtime;      // 40: last modified time
+    struct timespec     ctime;      // 56: created time
+    uint32_t addrs[NDIRECT+2];      // 72: Data block addresses
+    char             _dummy[4];     // 124:
 };
 
 // ブロックあたりのInode数 = 4096 / 128 = 32

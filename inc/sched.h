@@ -9,7 +9,7 @@
 #include <linux/time.h>
 #include <mmu.h>
 #include <spinlock.h>
-#include <trap.h>
+#include <irq.h>
 #include <utils.h>
 #include <linux/resources.h>
 
@@ -48,6 +48,12 @@ struct cpu_context {
 struct user_page {
     uint64_t    phys_addr;
     uint64_t    virt_addr;
+};
+
+struct trapframe {
+    uint64_t regs[31];
+    uint64_t sp, pc, pstate;
+    uint64_t stackframe[2];     // 巻き戻し用
 };
 
 // ユーザタスクのVM: VMはユーザタスク間で共有される場合がある。

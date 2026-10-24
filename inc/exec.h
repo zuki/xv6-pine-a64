@@ -24,7 +24,7 @@
 // AUXVの個数
 #define ELF_CHECK_ARCH(x)   ((x)->machine == EM_AARCH64)
 
-#define ELF_CHECK_E_IDNET(elf) \
+#define ELF_CHECK_E_IDENT(elf) \
         (   (elf)->e_ident[EI_MAG0] == ELFMAG0 \
          && (elf)->e_ident[EI_MAG1] == ELFMAG1 \
          && (elf)->e_ident[EI_MAG2] == ELFMAG2 \
@@ -41,6 +41,6 @@
 #define elf_caddr_t         char *
 #endif
 
-int exec(char *path, char *argv[], char *envp[]);
+int exec(char *path, char *argv[], int argcc, char *envp[], int envcc);
 
 #endif

@@ -30,7 +30,7 @@ limitations under the License.
  * @brief ページ領域の先頭（仮想）アドレス
  *        pages[0:PAGE_NUM] | page0, page1, ...
  */
-#define PAGE_START ((char*)(0x4a400000))
+#define PAGE_START ((char*)(0xffff00004a400000))
 
 /**
  * @ingroup mm
@@ -103,6 +103,7 @@ struct page *   page_find_head(const struct page *page);
 void            page_cleanup(struct page **page);
 
 void *          kalloc(size_t num);
+uint64_t        get_free_page(void);
 void            kfree(void *va);
 void            inc_kmem_ref(void *va);
 void            dec_kmem_ref(void *va);

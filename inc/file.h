@@ -29,10 +29,9 @@ struct inode {
     FIL *fatfp;
     DIR *fatdir;
 #endif
-    short type;                 //
-    short major;                // メジャーデバイス番号 (T_DEVICE only)
-    short minor;                // マイナーデバイス番号 (T_DEVICE only)
-    short nlink;                // inodeへのリンク数
+    uint16_t type;              // v6ファイルタイプ : T_XXX
+    uint16_t nlink;             // inodeへのリンク数
+    device_t devno;             // デバイス番号 : major/minor (T_DEVICE only)
     uint32_t size;              // ファイルサイズ（バイト単位）(bytes)
     mode_t mode;                // ファイルモード
 #if 0

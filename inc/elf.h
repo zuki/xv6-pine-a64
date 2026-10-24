@@ -218,11 +218,11 @@ typedef struct elf32_hdr{
   Elf32_Half    e_shstrndx;
 } Elf32_Ehdr;
 
-#define ELF_MAGIC   0x464C457FU
+//#define ELF_MAGIC   0x464C457FU
 
 typedef struct elf64_hdr {
-    //unsigned char    e_ident[EI_NIDENT];    /* ELF "magic number" */
-    Elf64_Word magic;
+    unsigned char    e_ident[EI_NIDENT];    /* ELF "magic number" */
+    //Elf64_Word magic;
     Elf64_Half e_type;
     Elf64_Half e_machine;
     Elf64_Word e_version;

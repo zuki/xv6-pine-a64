@@ -55,6 +55,10 @@ el2:
     dsb     sy
     isb
 
+    /* SIMD命令を有効にする */
+    ldr     x2, =CPACR_VALUE
+    msr     cpacr_el1, x2
+
     /* Change execution level to EL1. */
     mov     x2, #SPSR_VALUE
     msr     spsr_el2, x2

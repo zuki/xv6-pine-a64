@@ -7,6 +7,7 @@
 #include <console.h>
 #include <param.h>
 #include <spinlock.h>
+#include <sched.h>
 
 /* timer_listを保護するロック */
 struct spinlock timerlock;
@@ -22,12 +23,12 @@ static uint64_t timer_jiffies = 0;
 void timer_init(int core)
 {
     arm_ptimer_init(INTERVAL);
-    irq_register(GIC_PPI(14), timer_intr, NULL);
-    irq_enable(GIC_PPI(14));
+    irq_register(IRQ_ARM_PTIMER, timer_intr, NULL);
+    irq_enable(IRQ_ARM_PTIMER);
 
     initlock(&timerlock, "timer");
 
-    info("timer_init [%d]: arg: %p", core, &core);
+    info("timer_init ok");
 }
 
 void timer_intr(void *param)
@@ -35,6 +36,8 @@ void timer_intr(void *param)
 
     // pendingビットをクリア
     arm_ptimer_reset(INTERVAL);
+    timer_tick();
+
 #if 0
     uint64_t mpidr;
     asm volatile("mrs %0, mpidr_el1" : "=r"(mpidr));

@@ -34,6 +34,7 @@ void fileinit()
 {
     initlock(&ftable.lock, "file");
     init_devfs();
+    info("fileinit ok");
 }
 
 // ファイル構造体を割り当てる
@@ -99,8 +100,7 @@ static struct inode *create(char *path, int dirfd, int16_t type, uint16_t major,
     }
 
     ilock(ip);
-    ip->major = major;
-    ip->minor = minor;
+    ip->devno = makedev(major, minor);
     ip->nlink = 1;
     ip->mode  = mode/* & ~(myproc()->umask) */;
     ip->type  = type;
@@ -202,12 +202,12 @@ loop:
 
     if (ip->type == T_DEVICE) {
         f->type  = FD_DEVICE;
-        f->major = ip->major;
+        f->major = major(ip->devno);
         f->off   = 0;
         f->nonblocking = (mode & O_NONBLOCK) ? 1 : 0;
     } else if (ip->type == T_PROCFS) {
         f->type  = FD_PROCFS;
-        f->major = ip->major;
+        f->major = major(ip->devno);
         f->off   = 0;
         f->content = kalloc(1);
         assert(f->content);
@@ -646,8 +646,7 @@ int filesymlink(char *target, char *linkpath, int dirfd)
     }
 
     ilock(ip);
-    ip->major = 0;
-    ip->minor = 0;
+    ip->devno = 0;
     ip->nlink = 1;
     ip->mode = S_IFLNK | 0777;
     ip->type = T_SYMLINK;
@@ -768,7 +767,8 @@ int filemknod(char *path, mode_t mode, device_t dev)
     major = (uint16_t)((dev >> 8) & 0xFF);
     minor = (uint16_t)(dev & 0xFF);
 
-    if ((long)(ip = create(path, AT_FDCWD, T_DEVICE, major, minor, mode)) < 0) {
+    ip = create(path, AT_FDCWD, T_DEVICE, major, minor, mode);
+    if (IS_ERR(ip)) {
         error("error: 0x%lx", (long)ip);
         return (int)(long)ip;
     }

@@ -155,7 +155,7 @@ static int mmc_select_mode(struct mmc *mmc, enum bus_mode mode)
     mmc->selected_mode = mode;
     mmc->tran_speed = mmc_mode2freq(mmc, mode);
     mmc->ddr_mode = mmc_is_mode_ddr(mode);
-    debug("selecting mode %s (freq : %d MHz)", mmc_mode_name(mode),
+    info("selecting mode %s (freq : %d MHz)", mmc_mode_name(mode),
          mmc->tran_speed / 1000000);
     return 0;
 }
@@ -511,7 +511,7 @@ static int sd_send_op_cond(struct mmc *mmc, bool uhs_en)
     mmc->high_capacity = ((mmc->ocr & OCR_HCS) == OCR_HCS);
     mmc->rca = 0;
 
-    debug("ocr: 0x%x, hc: 0x%x", mmc->ocr, mmc->high_capacity);
+    info("ocr: 0x%x, hc: 0x%x", mmc->ocr, mmc->high_capacity);
 
     return 0;
 }
@@ -667,7 +667,7 @@ static int __mmc_switch(struct mmc *mmc, uint8_t set, uint8_t index, uint8_t val
         ret = mmc_send_status(mmc, &status);
 
         if (!ret && (status & MMC_STATUS_SWITCH_ERROR)) {
-            debug("switch failed %d/%d/0x%x !", set, index,
+            error("switch failed %d/%d/0x%x !", set, index,
                  value);
             return -EIO;
         }
@@ -1084,7 +1084,7 @@ static int sd_read_ssr(struct mmc *mmc)
             mmc->ssr.erase_offset = eo * 1000;
         }
     } else {
-        debug("Invalid Allocation Unit Size.");
+        error("Invalid Allocation Unit Size.");
     }
 
     return 0;
@@ -1146,7 +1146,7 @@ int mmc_set_clock(struct mmc *mmc, unsigned int clock, bool disable)
     mmc->clock = clock;
     mmc->clk_disable = disable;
 
-    debug("clock is %s (%dHz)", disable ? "disabled" : "enabled", clock);
+    info("clock is %s (%dHz)", disable ? "disabled" : "enabled", clock);
 
     return mmc_set_ios(mmc);
 }
@@ -1255,7 +1255,7 @@ static int sd_select_mode_and_width(struct mmc *mmc, unsigned int card_caps)
 
         for (w = widths; w < widths + ARRAY_SIZE(widths); w++) {
             if (*w & caps & mwt->widths) {
-                debug("trying mode %s width %d (at %d MHz)",
+                trace("trying mode %s width %d (at %d MHz)",
                      mmc_mode_name(mwt->mode),
                      bus_width(*w),
                      mmc_mode2freq(mmc, mwt->mode) / 1000000);
@@ -1280,7 +1280,7 @@ static int sd_select_mode_and_width(struct mmc *mmc, unsigned int card_caps)
                 if (mwt->tuning) {
                     err = mmc_execute_tuning(mmc, mwt->tuning);
                     if (err) {
-                        debug("tuning failed");
+                        error("tuning failed");
                         goto error;
                     }
                 }
@@ -1987,7 +1987,7 @@ int mmc_get_op_cond(struct mmc *mmc, bool quiet)
          * ない。UHSの初期化中にエラーが発生した際、そこから復旧することが
          * できないからである。
          */
-        debug("Unable to do a full power cycle. Disabling the UHS modes for safety");
+        warn("Unable to do a full power cycle. Disabling the UHS modes for safety");
         uhs_en = false;
         mmc->host_caps &= ~UHS_CAPS;
         err = mmc_power_on(mmc);
@@ -2056,6 +2056,11 @@ int mmc_start_init(struct mmc *mmc)
 
     // デバイスを初期化する
     err = mmc_get_op_cond(mmc, false);
+    if (err) {
+        error("mmc_get_op_cond failed: %d", err);
+    } else {
+        info("mmc_start_init ok");
+    }
 
     return err;
 }
@@ -2065,15 +2070,20 @@ static int mmc_complete_init(struct mmc *mmc)
 {
     int err = 0;
 
-    if (mmc->op_cond_pending)
+    if (mmc->op_cond_pending) {
         err = mmc_complete_op_cond(mmc);
-
+        if (err)
+            error("mmc_complete_op_cond failed: %d", err);
+    }
     if (!err)
         err = mmc_startup(mmc);
-    if (err)
+    if (err) {
         mmc->has_init = 0;
-    else
+        error("mmc_startup failed: %d", err);
+    } else {
         mmc->has_init = 1;
+        info("mmc_complete_init ok");
+    }
     return err;
 }
 
@@ -2087,10 +2097,17 @@ int mmc_initialize(struct mmc *mmc)
     mmc->dsr = (unsigned int)-1;
 
     err = mmc_start_init(mmc);
-    if (!err)
+    if (!err) {
         err = mmc_complete_init(mmc);
+    } else {
+        error("mmc_start_init failed: %d", err);
+    }
 
-    info("ok");
+    if (err) {
+        error("mmc_complete_init failed: %d", err);
+    } else {
+        info("mmc_initialze ok");
+    }
     return err;
 }
 
@@ -2176,7 +2193,7 @@ unsigned long mmc_bread(struct mmc *mmc, lbaint_t start, lbaint_t blkcnt, void *
     do {
         cur = (blocks_todo > b_max) ? b_max : blocks_todo;
         if (mmc_read_blocks(mmc, dst, start, cur) != cur) {
-            debug("%s: Failed to read blocks", __func__);
+            error("%s: Failed to read blocks", __func__);
             return 0;
         }
         blocks_todo -= cur;

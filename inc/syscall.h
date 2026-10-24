@@ -2,7 +2,6 @@
 #define INC_SYSCALL1_H
 
 #include <types.h>
-#include <trap.h>
 #include <fs.h>
 #include <linux/syscall.h>
 #include <linux/fcntl.h>

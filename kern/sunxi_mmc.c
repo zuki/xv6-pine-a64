@@ -53,9 +53,6 @@ struct sunxi_mmc_priv {
 static struct sunxi_mmc_priv mmc_priv;
 static struct mmc_config mmc_config;
 
-//#define get32(r)          (get32((uint32_t *)(uintptr_t)(r)))
-//#define put32(r, v)       (put32((uint32_t *)(uintptr_t)(r), (v)))
-
 /*
  * A64以降のすべてのMMCコントローラは、自動キャリブレーション
  * 機能を備えている。通常、これは互換性文字列（compatible string）から
@@ -125,12 +122,12 @@ static int mmc_set_mod_clk(struct sunxi_mmc_priv *priv, unsigned int hz)
 
     // New mode of Samplin/Output Timing
     val |= CCM_MMC_CTRL_MODE_SEL_NEW;
-    put32(priv->reg->ntsr, get32(priv->reg->ntsr) | SUNXI_MMC_NTSR_MODE_SEL_NEW);
+    put32((uint64_t)&priv->reg->ntsr, get32((uint64_t)&priv->reg->ntsr) | SUNXI_MMC_NTSR_MODE_SEL_NEW);
 
     //                   clock ON      OSC24M  CLK_DIV_RATION_N CLK_DIV_RATIO_M
-    put32((uintptr_t)priv->mclkreg, (0x1 << 31) | pll | ((n) << 16) | (div - 1) | val);
+    put32((uint64_t)&priv->mclkreg, (0x1 << 31) | pll | ((n) << 16) | (div - 1) | val);
 
-    debug("mmc %u set mod-clk req %u parent %u n %u m %u rate %u",
+    trace("mmc %u set mod-clk req %u parent %u n %u m %u rate %u",
           priv->mmc_no, hz, pll_hz, 1u << n, div, pll_hz / (1u << n) / div);
 
     return 0;
@@ -146,25 +143,25 @@ static int mmc_update_clk(struct sunxi_mmc_priv *priv)
           SUNXI_MMC_CMD_UPCLK_ONLY |
           SUNXI_MMC_CMD_WAIT_PRE_OVER;
 
-    put32(priv->reg->cmd, cmd);
-    while (get32(priv->reg->cmd) & SUNXI_MMC_CMD_START) {
+    put32((uint64_t)&priv->reg->cmd, cmd);
+    while (get32((uint64_t)&priv->reg->cmd) & SUNXI_MMC_CMD_START) {
         if (get_timer(start) > timeout_msecs)
             return -1;
     }
 
     // クロックの更新は様々な割り込みステータスビットをセットするのでこれらをクリアする
-    put32(priv->reg->rint, get32(priv->reg->rint));
+    put32((uint64_t)&priv->reg->rint, get32((uint64_t)&priv->reg->rint));
 
     return 0;
 }
 
 static int mmc_config_clock(struct sunxi_mmc_priv *priv, struct mmc *mmc)
 {
-    unsigned rval = get32(priv->reg->clkcr);
+    unsigned rval = get32((uint64_t)&priv->reg->clkcr);
 
     // クロックを無効にする
     rval &= ~SUNXI_MMC_CLK_ENABLE;
-    put32(priv->reg->clkcr, rval);
+    put32((uint64_t)&priv->reg->clkcr, rval);
     if (mmc_update_clk(priv))
         return -1;
 
@@ -174,7 +171,7 @@ static int mmc_config_clock(struct sunxi_mmc_priv *priv, struct mmc *mmc)
 
     // 内部ディバイダをクリアする
     rval &= ~SUNXI_MMC_CLK_DIVIDER_MASK;
-    put32(priv->reg->clkcr, rval);
+    put32((uint64_t)&priv->reg->clkcr, rval);
 
     /* A64はMMCコントローラの遅延（ディレイ）のキャリブレーションを
      * サポートしている。キャリブレーションを開始する前には遅延をゼロに
@@ -183,11 +180,11 @@ static int mmc_config_clock(struct sunxi_mmc_priv *priv, struct mmc *mmc)
      * U-BootやLinuxではサポートされていない。
      */
     if (sunxi_mmc_can_calibrate())
-        put32(priv->reg->samp_dl, SUNXI_MMC_CAL_DL_SW_EN);
+        put32((uint64_t)&priv->reg->samp_dl, SUNXI_MMC_CAL_DL_SW_EN);
 
     /* クロックを有効にする */
     rval |= SUNXI_MMC_CLK_ENABLE;
-    put32(priv->reg->clkcr, rval);
+    put32((uint64_t)&priv->reg->clkcr, rval);
     if (mmc_update_clk(priv))
         return -1;
 
@@ -208,11 +205,11 @@ static int sunxi_mmc_set_ios_common(struct sunxi_mmc_priv *priv,
 
     /* バス幅を変更する */
     if (mmc->bus_width == 8)
-        put32(priv->reg->width, 0x2);
+        put32((uint64_t)&priv->reg->width, 0x2);
     else if (mmc->bus_width == 4)
-        put32(priv->reg->width, 0x1);
+        put32((uint64_t)&priv->reg->width, 0x1);
     else
-        put32(priv->reg->width, 0x0);
+        put32((uint64_t)&priv->reg->width, 0x0);
 
     return 0;
 }
@@ -234,14 +231,14 @@ static int mmc_trans_data_by_cpu(struct sunxi_mmc_priv *priv, struct mmc *mmc,
         timeout_msecs = 2000;
 
     /* Always read / write data through the CPU */
-    put32(priv->reg->gctrl, get32(priv->reg->gctrl) | SUNXI_MMC_GCTRL_ACCESS_BY_AHB);
+    put32((uint64_t)&priv->reg->gctrl, get32((uint64_t)&priv->reg->gctrl) | SUNXI_MMC_GCTRL_ACCESS_BY_AHB);
 
     start = get_timer(0);
 
     for (i = 0; i < word_cnt;) {
         unsigned int in_fifo;
 
-        while ((status = get32(priv->reg->status)) & status_bit) {
+        while ((status = get32((uint64_t)&priv->reg->status)) & status_bit) {
             if (get_timer(start) > timeout_msecs)
                 return -1;
         }
@@ -254,7 +251,7 @@ static int mmc_trans_data_by_cpu(struct sunxi_mmc_priv *priv, struct mmc *mmc,
          * fill level to write chunks of words.
          */
         if (!reading) {
-            put32(priv->reg->fifo, buff[i++]);
+            put32((uint64_t)&priv->reg->fifo, buff[i++]);
             continue;
         }
 
@@ -272,7 +269,7 @@ static int mmc_trans_data_by_cpu(struct sunxi_mmc_priv *priv, struct mmc *mmc,
         if (in_fifo == 0 && (status & SUNXI_MMC_STATUS_FIFO_FULL))
             in_fifo = 32;
         for (; in_fifo > 0; in_fifo--)
-            buff[i++] = get32(priv->reg->fifo);
+            buff[i++] = get32((uint64_t)&priv->reg->fifo);
         dmb();
     }
 
@@ -286,10 +283,10 @@ static int mmc_rint_wait(struct sunxi_mmc_priv *priv, struct mmc *mmc,
     unsigned long start = get_timer(0);
 
     do {
-        status = get32(priv->reg->rint);
+        status = get32((uint64_t)&priv->reg->rint);
         if ((get_timer(start) > timeout_msecs) ||
             (status & SUNXI_MMC_RINT_INTERRUPT_ERROR_BIT)) {
-            debug("%s timeout %x", what,
+            error("%s timeout %x", what,
                   status & SUNXI_MMC_RINT_INTERRUPT_ERROR_BIT);
             return -ETIMEDOUT;
         }
@@ -311,7 +308,7 @@ static int sunxi_mmc_send_cmd_common(struct sunxi_mmc_priv *priv,
     if (priv->fatal_err)
         return -1;
     if (cmd->resp_type & MMC_RSP_BUSY)
-        debug("mmc cmd %d check rsp busy", cmd->cmdidx);
+        trace("mmc cmd %d check rsp busy", cmd->cmdidx);
     if (cmd->cmdidx == 12)      // 転送中止
         return 0;
 
@@ -335,16 +332,16 @@ static int sunxi_mmc_send_cmd_common(struct sunxi_mmc_priv *priv,
             cmdval |= SUNXI_MMC_CMD_WRITE;
         if (data->blocks > 1)
             cmdval |= SUNXI_MMC_CMD_AUTO_STOP;
-        put32(priv->reg->blksz, data->blocksize);
-        put32(priv->reg->bytecnt, data->blocks * data->blocksize);
+        put32((uint64_t)&priv->reg->blksz, data->blocksize);
+        put32((uint64_t)&priv->reg->bytecnt, data->blocks * data->blocksize);
     }
 
-    debug("mmc %d, cmd %d(0x%08x), arg 0x%08x", priv->mmc_no,
+    trace("mmc %d, cmd %d(0x%08x), arg 0x%08x", priv->mmc_no,
           cmd->cmdidx, cmdval | cmd->cmdidx, cmd->cmdarg);
-    put32(priv->reg->arg, cmd->cmdarg);
+    put32((uint64_t)&priv->reg->arg, cmd->cmdarg);
 
     if (!data)
-        put32(priv->reg->cmd, cmdval | cmd->cmdidx);
+        put32((uint64_t)&priv->reg->cmd, cmdval | cmd->cmdidx);
 
     /*
      * transfer data and check status
@@ -355,11 +352,11 @@ static int sunxi_mmc_send_cmd_common(struct sunxi_mmc_priv *priv,
         int ret = 0;
 
         bytecnt = data->blocksize * data->blocks;
-        debug("trans data %d bytes", bytecnt);
-        put32(priv->reg->cmd, cmdval | cmd->cmdidx);
+        trace("trans data %d bytes", bytecnt);
+        put32((uint64_t)&priv->reg->cmd, cmdval | cmd->cmdidx);
         ret = mmc_trans_data_by_cpu(priv, mmc, data);
         if (ret) {
-            error = get32(priv->reg->rint) &
+            error = get32((uint64_t)&priv->reg->rint) &
                 SUNXI_MMC_RINT_INTERRUPT_ERROR_BIT;
             error = -ETIMEDOUT;
             goto out;
@@ -373,7 +370,7 @@ static int sunxi_mmc_send_cmd_common(struct sunxi_mmc_priv *priv,
 
     if (data) {
         timeout_msecs = 120;
-        debug("cacl timeout %x msec", timeout_msecs);
+        trace("cacl timeout %u msec", timeout_msecs);
         error = mmc_rint_wait(priv, mmc, timeout_msecs,
                       data->blocks > 1 ?
                       SUNXI_MMC_RINT_AUTO_COMMAND_DONE :
@@ -388,9 +385,9 @@ static int sunxi_mmc_send_cmd_common(struct sunxi_mmc_priv *priv,
         timeout_msecs = 2000;
 
         do {
-            status = get32(priv->reg->status);
+            status = get32((uint64_t)&priv->reg->status);
             if (get_timer(start) > timeout_msecs) {
-                debug("busy timeout");
+                error("busy timeout");
                 error = -ETIMEDOUT;
                 goto out;
             }
@@ -398,26 +395,26 @@ static int sunxi_mmc_send_cmd_common(struct sunxi_mmc_priv *priv,
     }
 
     if (cmd->resp_type & MMC_RSP_136) {
-        cmd->response[0] = get32(priv->reg->resp3);
-        cmd->response[1] = get32(priv->reg->resp2);
-        cmd->response[2] = get32(priv->reg->resp1);
-        cmd->response[3] = get32(priv->reg->resp0);
-        debug("mmc resp 0x%08x 0x%08x 0x%08x 0x%08x",
+        cmd->response[0] = get32((uint64_t)&priv->reg->resp3);
+        cmd->response[1] = get32((uint64_t)&priv->reg->resp2);
+        cmd->response[2] = get32((uint64_t)&priv->reg->resp1);
+        cmd->response[3] = get32((uint64_t)&priv->reg->resp0);
+        trace("mmc resp 0x%08x 0x%08x 0x%08x 0x%08x",
               cmd->response[3], cmd->response[2],
               cmd->response[1], cmd->response[0]);
     } else {
-        cmd->response[0] = get32(priv->reg->resp0);
-        debug("mmc resp 0x%08x", cmd->response[0]);
+        cmd->response[0] = get32((uint64_t)&priv->reg->resp0);
+        trace("mmc resp 0x%08x", cmd->response[0]);
     }
 out:
     if (error < 0) {
-        debug("error: %d", error);
-        put32(priv->reg->gctrl, SUNXI_MMC_GCTRL_RESET);
+        error("error: %d", error);
+        put32((uint64_t)&priv->reg->gctrl, SUNXI_MMC_GCTRL_RESET);
         mmc_update_clk(priv);
     }
 
-    put32(priv->reg->rint, 0xffffffff);
-    put32(priv->reg->gctrl, get32(priv->reg->gctrl) | SUNXI_MMC_GCTRL_FIFO_RESET);
+    put32((uint64_t)&priv->reg->rint, 0xffffffff);
+    put32((uint64_t)&priv->reg->gctrl, get32((uint64_t)&priv->reg->gctrl) | SUNXI_MMC_GCTRL_FIFO_RESET);
     delay_us(1000);
 
     return error;
@@ -452,7 +449,7 @@ static void sunxi_cd_gpios_init(void)
 
     // 3. レジスタ設定が電気的に安定するまでわずかに待つ (数サイクル)
     for (volatile int i = 0; i < 100; i++);
-    debug("sunxi_cd_gpios_init ok");
+    trace("sunxi_cd_gpios_init ok");
 }
 
 // カードが挿入されてれば 1
@@ -509,10 +506,11 @@ int sunxi_mmc_probe(struct mmc *mmc)
     mmc->cfg = (const struct mmc_config *)cfg;
 
     /* コントローラをリセットする */
-    put32(priv->reg->gctrl, SUNXI_MMC_GCTRL_RESET);
+    put32((uint64_t)&priv->reg->gctrl, SUNXI_MMC_GCTRL_RESET);
     delay_us(1000);
 
-    trace("SMHC_CNTL: %x", get32(priv->reg->gctrl));
+    trace("SMHC_CNTL: %x", get32((uint64_t)&priv->reg->gctrl));
+    info("sunxi_mmc_probe ok");
 
     return 0;
 }

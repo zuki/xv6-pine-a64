@@ -86,6 +86,8 @@
 #define GIC_PPI(n)          (GIC_IRQ_PPI + (n))     // コアプライベート割り込み
 #define GIC_SPI(n)          (GIC_IRQ_SPI + (n))     // コア共有割り込み
 
+#define IRQ_ARM_VTIMER      GIC_PPI(11)     // 27
+#define IRQ_ARM_PTIMER      GIC_PPI(14)     // 30
 #define IRQ_UART0           GIC_SPI(0)      // 32
 #define IRQ_TIMER0          GIC_SPI(0x12)   // 50
 #define IRQ_TIMER1          GIC_SPI(0x13)   // 51
@@ -109,7 +111,7 @@
 #define     PLL_PERIPH0_CTRL_24M_OUT_EN (1 << 18)
 #define     PLL_PERIPH0_CTRL_FACTOR_N   (0x18 << 8)
 #define     PLL_PERIPH0_CTRL_FACTOR_K   (1 << 4)
-#define     PLL_PERIPH0_CTRL_FACTOR_M   (1 << 0)
+#define     PLL_PERIPH0_CTRL_FACTOR_M   (1 << 0)w
 #define AHB1_APB1_CFG_REG       (CCU_BASE + 0x0054)
 #define     AHB1_CFG_AHB1_CLK_SRC_SEL   (3 << 12)
 #define     AHB1_CFG_APB1_CLK_RATIO     (1 << 8)
@@ -125,6 +127,8 @@
 #define BUS_SOFT_RST_REG4       (CCU_BASE + 0x02d8)
 #define     BUS_SOFT_RST0_UART0_RST     (1 << 16)
 
+#ifndef __ASSEMBLER__
+
 void irq_init_gicd(void);
 void irq_init_gicc(int core);
 void irq_enable(int i);
@@ -133,5 +137,7 @@ void irq_register(int i, void (*f)(void *), void *param);
 void irq_handler(void/* int user_mode */);
 void irq_error(uint64_t type);
 void irq_send_sgi_to_me(uint32_t irqno);
+
+#endif
 
 #endif

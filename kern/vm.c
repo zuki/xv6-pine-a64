@@ -105,24 +105,25 @@ void vm_free(uint64_t *pgdir, int level)
 }
 #endif
 
-// ユーザページを1ページ割り当てて、マップして返す。
+// 1ページ割り当て、userにマッピングする. ページのカーネル仮想アドレスを返す, 0 if failed.
 void *allocate_user_page_mm(struct mm_struct *mm, uint64_t va, uint64_t perm)
 {
-    char *page;
+    uint64_t page;
 
     if (mm->user_pages_count == MAX_TASK_USER_PAGES) {
         error("reached limit of MAX_TASK_USER_PAGES %d", MAX_TASK_USER_PAGES);
         return 0;
     }
 
-    page = kalloc(1);    // pageはpa
+    page = get_free_page();    // このpageはpa
     if (page == 0) {
         error("no page");
         return 0;
     }
-
-    if (map_page(mm, va, (uint64_t)page, 1, perm)) {
-        return P2V(page);
+    trace("call map_page");
+    trace("va: 0x%lx, page: 0x%lx, alloc: 1, perm: 0x%lx", va, page, perm);
+    if (map_page(mm, va, page, 1, perm)) {
+        return P2V(page);       // 仮想アドレスを返す
     } else {
         error("map_page failed: va=0x%lx, pa=0x%lx, perm=0x%lx", va, page, perm);
         return 0;
@@ -142,16 +143,18 @@ static uint64_t *map_table_entry(uint64_t *pte, uint64_t va, uint64_t pa, uint64
 
 // 仮想アドレスvaからテーブルインデックスを抽出し、親テーブルのディスクリプタを用意する。
 // 次のレベルのpgtableの物理アドレスを返す
-static uint64_t map_table(uint64_t *table, uint64_t shift, uint64_t va,
+static uint64_t map_table(uint64_t *table /*va*/, uint64_t shift, uint64_t va,
     int *alloc, uint64_t **pdesc)
 {
-    uint64_t index = va >> shift;
+    uint64_t index = (va >> shift);
     index = index & (PTRS_PER_TABLE - 1);
-    if (pdesc)
+    trace("va: 0x%lx, shift: %d, table[%d]: 0x%lx", va, shift, index, table[index]);
+    if (pdesc) {
         *pdesc = table + index;
+    }
     if (!table[index]) {
         if (*alloc) {
-            uint64_t next_level_table = (uint64_t)kalloc(1);
+            uint64_t next_level_table = get_free_page();    // pa
             if (!next_level_table) {
                 error("no more memory");
                 *alloc = 0;
@@ -159,6 +162,7 @@ static uint64_t map_table(uint64_t *table, uint64_t shift, uint64_t va,
             }
             uint64_t entry = next_level_table | MM_TYPE_PAGE_TABLE;
             table[index] = entry;
+            trace("table[%d]: 0x%lx, next_table: 0x%lx", index, table[index], next_level_table);
             return next_level_table;
         } else {
             *alloc = 0;
@@ -166,30 +170,33 @@ static uint64_t map_table(uint64_t *table, uint64_t shift, uint64_t va,
         }
     } else {
         *alloc = 0;
+        trace("PTE: 0x%lx, pa: 0x%lx", table[index], PTE_TO_PA(table[index]));
         return PTE_TO_PA(table[index]);
     }
 }
 
-//タスクのpgtableツリーをたどる. ユーザ仮想アドレスに対応するpteを探して（オプションで）更新する
-uint64_t *map_page(struct mm_struct *mm, uint64_t va, uint64_t page, int alloc, uint64_t perm)
+//タスクのpgtableツリーをたどる. ユーザ仮想アドレスに対応するpteを探して（オプションで）更新する。
+// pteのカーネル仮想アドレスを返す
+uint64_t *map_page(struct mm_struct *mm, uint64_t va /*uva*/, uint64_t page /*pa*/, int alloc, uint64_t perm)
 {
     uint64_t *desc;
     assert(mm);
-
+    trace("va: 0x%lx, page: 0x%lx, alloc: %d, perm: 0x%lx", va, page, alloc, perm);
     int nk = mm->kernel_pages_count;
     uint64_t *descs[4] = { 0 };
-    uint64_t ker_pages[4] = { 0 };
+    uint64_t ker_pages[4] = { 0 };      // pa
 
     if (page != 0 && alloc == 1 && mm->user_pages_count >= MAX_TASK_USER_PAGES) {
-        error("no more user pages");
+        error("no more user pages: user_pages_count: %d", mm->user_pages_count);
         return 0;
     }
 
+    // タスクのトップレベルのpgtableから開始する。ない場合は割り当てる
     if (!mm->pgd) {
         if (alloc) {
             if (nk == MAX_TASK_KER_PAGES)
                 goto fail;
-            if (!(mm->pgd = (uint64_t)kalloc(1)))
+            if (!(mm->pgd = get_free_page()))
                 goto fail;
             ker_pages[0] = mm->pgd;
             descs[0] = &(mm->pgd);
@@ -197,15 +204,18 @@ uint64_t *map_page(struct mm_struct *mm, uint64_t va, uint64_t page, int alloc, 
             goto fail;
         }
     }
+    trace("[0] mm->pgd: 0x%lx, kpage: 0x%lx, descs: %p (0x%lx)", mm->pgd, ker_pages[0], descs[0], *descs[0]);
 
     __attribute__((unused)) const char *lvs[] = { "pgd", "pud", "pmd", "pte" };
     const int shifts[] = { 0, PGD_SHIFT, PUD_SHIFT, PMD_SHIFT };
-    uint64_t table = mm->pgd;
+    uint64_t table = mm->pgd;       // pgd/pud/pmd/pteのpa
     int allocated;
 
     for (int i = 1; i < 4; i++) {
         allocated = alloc;
+        trace("before[%d] table: pa(0x%lx), va(0x%lx)", i, table, P2V(table));
         table = map_table(P2V(table), shifts[i], va, &allocated, &desc);
+        trace("[%d] table: 0x%lx, allocated: %ld, desc: %p", i, table, allocated, desc);
         if (table) {
             if (allocated) {
                 ker_pages[i] = table;
@@ -225,6 +235,7 @@ uint64_t *map_page(struct mm_struct *mm, uint64_t va, uint64_t page, int alloc, 
             }
             goto fail;
         }
+        trace("[%d] kpage: 0x%lx, descs: %p (0x%lx)", i, ker_pages[i], descs[i], *descs[i]);
     }
 
     uint64_t *pte_va = map_table_entry(P2V(table), va, page, perm);
@@ -237,14 +248,14 @@ uint64_t *map_page(struct mm_struct *mm, uint64_t va, uint64_t page, int alloc, 
         if (ker_pages[i] == 0) continue;
         mm->kernel_pages[mm->kernel_pages_count++] = ker_pages[i];
     }
-
+    trace("pte_va: %p (0x%lx)", pte_va, *pte_va);
     return pte_va;
 
 fail:
     for (int i = 0; i < 4; i++) {
         if (ker_pages[i] == 0) continue;
         assert(alloc && descs[i]);
-        kfree((char *)ker_pages[i]);
+        kfree((char *)P2V(ker_pages[i]));
         *descs = 0;
     }
     error("failed. reverse allocated pgtables during tree walk");
@@ -260,6 +271,7 @@ int dup_current_virt_memory(struct mm_struct *dstmm)
 
     acquire(&srcmm->lock);
     for (uint64_t i = 0; i < srcmm->sz; i += PAGE_SIZE) {
+        trace("call map_page");
         uint64_t *pte = map_page(srcmm, i, 0, 0, 0);
         assert(pte);
         uint64_t perm = PTE_TO_PERM(*pte);
@@ -271,6 +283,7 @@ int dup_current_virt_memory(struct mm_struct *dstmm)
 
     // ユーザスタックをコピーする
     for (uint64_t i = PGROUNDDOWN(regs->sp); i < USER_TOP; i += PAGE_SIZE) {
+        trace("call map_page");
         uint64_t *pte = map_page(srcmm, i, 0, 0, 0);
         assert(pte);
         void *kernel_va = allocate_user_page_mm(dstmm, i, MM_AP_RW | MM_XN);
@@ -294,15 +307,17 @@ no_mem:
 // 仮想アドレスの物理アドレスを返す
 uint64_t walkaddr(struct mm_struct *mm, uint64_t va)
 {
+    trace("va: 0x%lx", va);
     uint64_t *pte = map_page(mm, va, 0, 0, 0);
     if (!pte) return 0;
 
     if ((*pte & ~(PAGE_MASK) & (~(uint64_t)MM_AP_MASK)) != MMU_PTE_FLAGS) {
-        error("pte found but invalid %016llx, %016llx", (*pte & ~(PAGE_MASK) & (~(uint64_t)MM_AP_MASK)), MMU_PTE_FLAGS);
+        error("pte (*pte: 0x%lx) found but invalid %016lx, %016lx", *pte, (*pte & ~(PAGE_MASK) & (~(uint64_t)MM_AP_MASK)), MMU_PTE_FLAGS);
         return 0;
     }
-    assert((PTE_TO_PA(*pte >= PHYS_BASE)) && (PTE_TO_PA(*pte) < PHYS_BASE + PHYS_SIZE));
-
+    trace("va: 0x%lx, *pte: 0x%lx, pte_pa: 0x%lx", va, *pte, PTE_TO_PA(*pte));
+    assert(PTE_TO_PA(*pte) >= USER_BASE && PTE_TO_PA(*pte) < USER_TOP);
+    trace("va: 0x%lx, pa: 0x%lx", va, PTE_TO_PA(*pte));
     return PTE_TO_PA(*pte);
 }
 
@@ -453,7 +468,7 @@ void free_task_pages(struct mm_struct *mm, int useronly)
         for (int i = 0; i < mm->kernel_pages_count; i++) {
             page = mm->kernel_pages[i];
             assert(page);
-            kfree((char *)page);
+            kfree((char *)P2V(page));
         }
         memset(&mm->kernel_pages, 0, sizeof(mm->kernel_pages));
         mm->kernel_pages_count = 0;
@@ -461,23 +476,26 @@ void free_task_pages(struct mm_struct *mm, int useronly)
     }
 }
 
-// ユーザページを案マップして解放する
+// ユーザページをアンマップして解放する
 static int free_user_page_range(struct mm_struct *mm, uint64_t start_va, uint64_t size)
 {
     uint64_t *pte;
     uint64_t page;      // pa
     int cnt = 0;
+    trace("va: 0x%lx, size: 0x%lx", start_va, size);
 
     assert(!(start_va & (~PAGE_MASK)) && !(size & (~PAGE_MASK)) && mm);
 
     for (uint64_t i = start_va; i < start_va + size; i += PAGE_SIZE, cnt++) {
+        trace("call map_page");
         pte = map_page (mm, i, 0, 0, 0);
-        if (*pte) {
-            error("faile map_page: va: 0x%lx, cnt: %d", i, cnt);
+        if (!pte) {
+            error("map_page failed: i: 0x%lx, cnt: %d", i, cnt);
             return -1;
         }
         page = PTE_TO_PA(*pte);
-        kfree((char *)page);
+        kfree((char *)P2V(page));
+        assert(mm->user_pages_count > 0);
         mm->user_pages_count--;
         *pte = 0;
     }
@@ -490,6 +508,7 @@ uint64_t growproc(struct mm_struct *mm, int incr)
     uint64_t sz = mm->sz, sz1;
     void *kva;
     int ret;
+    trace("sz: 0x%lx, incr: 0x%x", sz, incr);
 
     if (incr < 0 && sz < -incr) {
         error("incr too small: sz 0x%lx (%ld) incr %d. requested new brk 0x%lx",
@@ -536,19 +555,20 @@ int do_mem_abort(uint64_t addr, uint64_t esr, uint64_t elr)
     struct task_struct *p = myproc();
     __attribute__((unused)) struct trapframe *regs = task_pt_regs(p);
     uint64_t dfs = (esr & 0b111111);
-
+    debug("addr: 0x%lx, dfs: 0x%lx", addr, dfs);
     if (addr > USER_TOP) {
         error("bad user va? faulty addr 0x%lx > USER_TOP 0x%x\n"
               "esr 0x%lx, elr 0x%lx", addr,USER_TOP, esr, elr);
         goto bad;
     }
-    if ((dfs & 0b111100) == 0b100) {
-        uint64_t page = (uint64_t)kalloc(1);
+    if ((dfs & 0b111100) == 0b100) {            // デマンドページング処理
+        uint64_t page = get_free_page();
         if (page == 0) {
             error("no more memory");
             goto bad;
         }
         acquire(&p->mm->lock);
+        trace("call map_page");
         map_page(p->mm, addr & PAGE_MASK, page, 1, MMU_PTE_FLAGS | MM_AP_RW);
         release(&p->mm->lock);
         ind++;
@@ -557,7 +577,7 @@ int do_mem_abort(uint64_t addr, uint64_t esr, uint64_t elr)
                     addr, myproc()->pid, ind);
             goto bad;
         }
-        debug("demand paging at user va 0x%lx, elr 0x%lx", addr, regs->pc);
+        debug("demand paging at user va 0x%lx, elr 0x%lx ok", addr, regs->pc);
         ind = 0;
         return 0;
     }

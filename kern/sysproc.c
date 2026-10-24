@@ -1,6 +1,5 @@
 #include <types.h>
 #include <sched.h>
-#include <trap.h>
 #include <console.h>
 #include <vm.h>
 #include <syscall.h>
@@ -208,7 +207,7 @@ int sys_exit_group(int status) {
 
 // void exit(int status)
 int sys_exit(int status) {
-    trace("[%d] exit '%s' with code %d", myproc()->pid, myproc()->name, status);
+    debug("[%d] exit '%s' with code %d", myproc()->pid, myproc()->name, status);
     exit_process(status);
     return 0;
 }
@@ -220,7 +219,7 @@ int sys_wait4(int pid, uint64_t statusp/* uva */, int options, uint64_t rusagep/
     int status;
     int error;
 
-    trace("[%d] pid: %d, statusp: 0x%lx, options: 0x%x, rusagep: 0x%lx", pid, statusp, options, rusagep);
+    debug("[%d] pid: %d, statusp: 0x%lx, options: 0x%x, rusagep: 0x%lx", pid, statusp, options, rusagep);
 
     if ((error = argptr(statusp, (char *)&status, sizeof(int))) < 0)
         return error;

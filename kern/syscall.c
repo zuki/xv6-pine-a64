@@ -1,7 +1,7 @@
 #include <types.h>
 #include <syscall.h>
 #include <memlayout.h>
-#include <trap.h>
+#include <irq.h>
 #include <console.h>
 #include <sched.h>
 //#include <debug.h>
@@ -24,6 +24,10 @@ int in_user(uint64_t addr, size_t n)
 
     if (addr + n <= mm->sz)
         return 1;
+
+    if (addr < USER_TOP) {
+        return 1;
+    }
 
     // TODO: vmaを作成したら修正
 #if 0
@@ -60,8 +64,9 @@ int argptr(uint64_t addr, char *pp, size_t size)
     }
 
     if (in_user(addr, size)) {
-        if (copyin(myproc()->mm, pp, addr, size) < 0)
+        if (copyin(myproc()->mm, pp, addr, size) < 0) {
             return -1;
+        }
         return 0;
     }
     return -1;

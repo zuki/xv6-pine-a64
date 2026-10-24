@@ -60,11 +60,11 @@
  */
 
 //#define STACKPAGE   1024
-//#define STACKTOP    USER_TOP                 /* スタックはUSER_TOPから */
+//#define STACKTOP    USER_TOP                  /* スタックはUSER_TOPから */
 //#define STACKBASE   (STACKTOP - STACKPAGE * PGSIZE) /* スタックは16ページ */
-//#define MMAPBASE    0x0000FFDFFFFF0000      /* mmapアドレスの基底アドレス */
-//#define ELF_ET_DYN_BASE 0x0000FFDEFFFF0000  /* dynamic lib を置くアドレス */
-//#define MMAPTOP     USER_TOP                 /* ARGV, ENVPなどはstack_topからmmapするため */
+//#define MMAPBASE    0x0000FFDFFFFF0000        /* mmapアドレスの基底アドレス */
+//#define ELF_ET_DYN_BASE 0x0000FFDEFFFF0000    /* dynamic lib を置くアドレス */
+//#define MMAPTOP     USER_TOP                  /* ARGV, ENVPなどはstack_topからmmapするため */
 
 
 #endif

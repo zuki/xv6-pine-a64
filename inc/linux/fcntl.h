@@ -93,11 +93,12 @@
 #define CLONE_THREAD    0x00010000
 
 
-// major num for devices
+// デバイスメジャー番号
 // modeled after: https://github.com/NJU-ProjectN/navy-apps/blob/master/README.md
 // TODO: make procfs a seperate file type (not just a major dev number...)
 enum {
-  CONSOLE = 1,
+  BLOCK = 0,        // ファイル・システム
+  CONSOLE,          // /dev/console
   DEVNULL,          // /dev/null
   DEVZERO,          // /dev/zero
   PROCFS_CPUINFO,

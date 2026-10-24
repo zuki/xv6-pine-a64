@@ -29,6 +29,7 @@ void console_init(void);
 void console_intr(void *_p);
 void cprintf1(const char *fmt, ...);
 void cprintf(const char *fmt, ...);
+void hexdump(const void *data, size_t size, const char *name);
 
 #define assert(x)                                                   \
 ({                                                                  \
@@ -49,8 +50,8 @@ void cprintf(const char *fmt, ...);
 ({                                              \
     acquire(&g_channel.lock);                   \
     if (!strcmp(_level, "PANIC"))               \
-        cprintf1("PANIC");                      \
-    cprintf1("[%d]%s#%d: ", cpuid(), __func__, __LINE__);    \
+        cprintf1("PANIC ");                      \
+    cprintf1("[%d]%s#L%d: ", cpuid(), __func__, __LINE__);    \
     cprintf1(__VA_ARGS__);                      \
     cprintf1("\n");                             \
     release(&g_channel.lock);                   \

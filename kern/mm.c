@@ -44,6 +44,7 @@ unsigned paging_pages_used = 0;
 void mm_init(void) {
     buddy_init();
     slab_cache_init();
+    info("mm_init ok");
 }
 
 /**
@@ -175,6 +176,15 @@ void *kalloc(size_t num)
     void *addr = page_address(page);
     trace("addr: 0x%p", addr);
     return addr;
+}
+
+// 1ページ（0詰め）を割り当てて0詰めしてページの物理アドレスを返す。失敗した場合は0を返す */
+uint64_t get_free_page(void)
+{
+    char *page = kalloc(1);
+    if (!page) return 0;
+    memset(page, 0, PGSIZE);
+    return V2P(page);
 }
 
 //typedef __uint128_t Align;

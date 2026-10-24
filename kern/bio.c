@@ -47,9 +47,10 @@ void binit(void)
 
     // バッファの連結リストを作成する
     list_init(&bcache.head);
-    for(b = bcache.buf; b < bcache.buf+NBUF; b++){
+    for(b = bcache.buf; b < bcache.buf+NBUF; b++) {
         list_push_back(&bcache.head, &b->clink);
-  }
+    }
+    info("binit ok");
 }
 
 // バッファキャッシュからデバイスdev のブロック番号 blockno の

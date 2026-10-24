@@ -6,7 +6,7 @@
 #include <uart.h>
 
 struct serial_channel g_channel;
-static int panicked = -1;
+//static int panicked = -1;
 
 #define C(x)  ((x)-'@')         // Control-x
 #define BACKSPACE 0x100
@@ -27,11 +27,12 @@ static void console_intr1(char (*getc)())
     int c; /*, prof = 0; */
 
     acquire(&g_channel.lock);
+#if 0
     if (panicked >= 0) {
         release(&g_channel.lock);
         while (1) ;
     }
-
+#endif
     while ((c = getc()) >= 0) {
         switch (c) {
         //case C('P'):           // Process listing.
@@ -121,6 +122,14 @@ void vprintfmt(void (*putch)(int), const char *fmt, va_list ap)
 {
     int i, c, j;
     char *s;
+
+#if 0
+    if (panicked >= 0 && panicked != cpuid()) {
+        release(&g_channel.lock);
+        while (1);
+    }
+#endif
+
     for (i = 0; (c = fmt[i] & 0xff) != 0; i++) {
         if (c != '%') {
             putch(c);
@@ -214,4 +223,39 @@ void cprintf1(const char *fmt, ...)
     va_start(ap, fmt);
     vprintfmt(uart_putchar, fmt, ap);
     va_end(ap);
+}
+
+void hexdump(const void *data, size_t size, const char *name)
+{
+    unsigned char *src;
+    int offset, index;
+
+    src = (unsigned char *)data;
+    cprintf("=== %s dump ===\n", name ? name : "");
+    cprintf("+--------------------+-----------------------------------------+------------------+\n");
+    for (offset = 0; offset < (int)size; offset += 16) {
+        cprintf("| 0x%016lx | ", (uint64_t)src + offset);
+        for (index = 0; index < 16; index+=2) {
+            if (offset + index < (int)size) {
+                cprintf("%02x%02x ", 0xff & src[offset + index], 0xff & src[offset + index + 1]);
+            } else {
+                cprintf("     ");
+            }
+        }
+        cprintf("| ");
+        for (index = 0; index < 16; index++) {
+            if (offset + index < (int)size) {
+                if (isascii(src[offset + index]) && isprint(src[offset + index])) {
+                    cprintf("%c", src[offset + index]);
+                } else {
+                    cprintf(".");
+                }
+            } else {
+                cprintf(" ");
+            }
+        }
+        cprintf(" |\n");
+    }
+    cprintf("+--------------------+-----------------------------------------+------------------+\n\n");
+
 }

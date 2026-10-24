@@ -72,7 +72,7 @@ void sched_init(void)
     // タスクテーブルの初期化
     for (int i = 0; i < NR_TASKS; i++) {
         tasks[i] = (struct task_struct *)(&kernel_stacks[i][0]);
-        assert((uint64_t)tasks[i] & ~PAGE_MASK);
+        assert(((uint64_t)tasks[i] & ~PAGE_MASK) == 0);
         memset(tasks[i], 0, sizeof(struct task_struct));
         initlock(&(tasks[i]->lock), "task");
         tasks[i]->state = TASK_UNUSED;
@@ -107,6 +107,9 @@ void sched_init(void)
     init_task->pid = 0;
     init_task->cwd = 0;
     safestrcpy(init_task->name, "init", 5);
+    debug("init_task: pid: %d, x19: 0x%lx, pc: 0x%lx, sp: 0x%lx", init_task->pid,
+        init_task->cpu_context.x19, init_task->cpu_context.pc, init_task->cpu_context.sp);
+    info("sched_init ok");
 }
 
 // 現在タスクを実行しているcpuidを返す: みつからない、エラーの場合は -1
@@ -128,15 +131,13 @@ void schedule(void)
 
     struct task_struct *p, *cur = myproc();
     int has_runnable;
-
+    trace("1");
     acquire(&sched_lock);
     cpu = cpuid();
-
     while (1) {
         max_cr = -1;
         next = 0;
         has_runnable = 0;
-
         for (int i = 0; i < NR_TASKS; i++) {
             p = tasks[i];
             assert(p);
@@ -155,6 +156,7 @@ void schedule(void)
         }
         // 最大クレジットを持つタスクがあったらそれに切り替える
         if (max_cr > 0) {
+            trace("switch task %d", next);
             switch_to(tasks[next]);
             break;
         }
@@ -169,24 +171,34 @@ void schedule(void)
             }
             // 理由2: RUNNABLEな通常タスクがない
         } else {
+            trace("switch idle %d", cpu);
             switch_to(idle_tasks[cpu]);
             break;
-
         }
     }
+    trace("a");
     release(&sched_lock);
+    trace("ok");
 }
 
 void leave_scheduler(void) {
-    release(&sched_lock);
+    trace("b");
+    if (holding(&sched_lock)) {
+        debug("release: cpu %d pid %d", cpuid(), sched_lock.cpu->proc->pid);
+        release(&sched_lock);
+    } else {
+        debug("nolocked: cpu %d pid %d", cpuid(), sched_lock.locked ? sched_lock.cpu->proc->pid : -1);
+    }
 }
 
 // 自発的スケジュール
 void yield(void)
 {
     struct task_struct *p = myproc();
+    trace("2");
     acquire(&sched_lock);
     p->credits = 0;
+    trace("c");
     release(&sched_lock);
     schedule();
 }
@@ -216,7 +228,9 @@ void switch_to(struct task_struct *next)
         release(&next->mm->lock);
     }
     // 実際に切り替え
+    trace("prev: %d, next: %d", prev->pid, next->pid);
     cpu_switch_to(prev, next);
+    trace("ok");
 }
 
 #define CPU_UTIL_INTERVAL   10      // cpu利用統計の測定頻度
@@ -232,16 +246,18 @@ void timer_tick(void)
 
         if ((cpu->total++ % CPU_UTIL_INTERVAL) == CPU_UTIL_INTERVAL - 1) {
             cpu->last_util = cpu->busy * 100 / cpu->total;
-            debug("u: %d, b: %d, t: %llu", cpu->last_util, cpu->busy, cpu->total);
+            trace("u: %d, b: %d, t: %llu", cpu->last_util, cpu->busy, cpu->total);
         }
-
+        trace("3");
         acquire(&sched_lock);
         if (cur->pid >= 0 && --cur->credits > 0) {
+            trace("d");
             release(&sched_lock);
             return;
         }
         // プリエンプション
         cur->credits = 0;
+        trace("e");
         release(&sched_lock);
     }
 
@@ -265,7 +281,7 @@ static int wakeup_nolock(void *chan)
         if (p->state == TASK_SLEEPING && p->chan == chan) {
             p->state = TASK_RUNNABLE;
             cnt++;
-            debug("wakeup cpu%d chan=0x%lx pid %d", cpuid(), (uint64_t)p->chan, p->pid);
+            trace("wakeup cpu%d chan=0x%lx pid %d", cpuid(), (uint64_t)p->chan, p->pid);
         }
     }
     return cnt;
@@ -278,8 +294,10 @@ static int wakeup_nolock(void *chan)
 int wakeup(void *chan)
 {
     int cnt;
+    trace("4");
     acquire(&sched_lock);
     cnt = wakeup_nolock(chan);
+    trace("f");
     release(&sched_lock);
     return cnt;
 }
@@ -291,6 +309,7 @@ void sleep(void *chan, struct spinlock *lk)
     struct task_struct *p = myproc();
 
     if (lk != &sched_lock) {
+        trace("5");
         acquire(&sched_lock);
         release(lk);
     }
@@ -306,6 +325,7 @@ void sleep(void *chan, struct spinlock *lk)
     p->chan = 0;
 
     if (lk != &sched_lock) {
+        trace("g");
         release(&sched_lock);
         acquire(lk);
     }
@@ -382,7 +402,7 @@ int wait4(pid_t pid, int *status, int options, struct rusage *ru)
     struct task_struct **pp;
     int havekids;
     struct task_struct *p = myproc();
-
+    trace("6");
     acquire(&sched_lock);
 
     for (;;) {
@@ -402,20 +422,24 @@ int wait4(pid_t pid, int *status, int options, struct rusage *ru)
              || (options & WNOHANG)) {
                 int status = p->xstate << 8;
                 if (status && copyout(p->mm, (uint64_t)status, (char *)&status, sizeof(int)) < 0) {
+                    trace("h");
                     release(&sched_lock);
                     return -EINVAL;
                 }
                 if (ru && copyout(p->mm, (uint64_t)ru, 0, sizeof(struct rusage)) < 0) {
+                    trace("i");
                     release(&sched_lock);
                     return -EINVAL;
                 }
                 pid = p0->pid;
                 freeproc(p0);
+                trace("j");
                 release(&sched_lock);
                 return pid;
             }
         }
         if (!havekids || killed(p)) {
+            trace("k");
             release(&sched_lock);
             return -ECHILD;
         }
@@ -442,7 +466,7 @@ void exit_process(int status)
     if (p->cwd)
         iput(p->cwd);
     p->cwd = 0;
-
+    trace("7");
     acquire(&sched_lock);
 
     if (reparent(p))
@@ -491,7 +515,7 @@ int kill(int pid)
 {
     int i;
     struct task_struct *p;
-
+    trace("8");
     acquire(&sched_lock);
     for (i = 0; i < NR_TASKS; i++) {
         p = tasks[i];
@@ -505,10 +529,12 @@ int kill(int pid)
             if (p->state == TASK_SLEEPING) {
                 p->state = TASK_RUNNABLE;
             }
+            trace("l");
             release(&sched_lock);
             return 0;
         }
     }
+    trace("m");
     release(&sched_lock);
     return -1;
 }
@@ -538,7 +564,7 @@ void procdump(void) {
     struct task_struct *p;
     char *state;
 
-    cprintf("\t %5s %10s %10s %20s", "pid", "state", "name", "sleep-on");
+    debug("\t %5s %10s %10s %20s", "pid", "state", "name", "sleep-on");
 
     for (int i = 0; i < NR_TASKS; i++) {
         p = tasks[i];
@@ -548,7 +574,7 @@ void procdump(void) {
             state = states[p->state];
         else
             state = "???";
-        cprintf("\t %5d %10s %10s %20llx\n", p->pid, state, p->name, (uint64_t)p->chan);
+        debug("\t %5d %10s %10s %20llx\n", p->pid, state, p->name, (uint64_t)p->chan);
     }
 
     info("paging mem: used %u total %u (%u/100)\n",
@@ -588,10 +614,22 @@ static struct mm_struct *alloc_mm(void) {
     return mm;
 }
 
-// カーネルタスクをEL0に昇格させて、最初のユーザータスクを作成する
+/* カーネルタスクをEL0に昇格させて、最初のユーザータスクを作成する
+ *
+ *  (kernel_exit経由で）初めてユーザスペースに戻るためのトラップ
+ *  フレームを設定する。実際の切り替えは kernel_exit が実行されるまで
+ *  行われないことに注意。
+ *
+ *  @start: ユーザコードの開始位置（新規タスクにコピーされる）。カーネル仮想アドレス
+ *  @size: 初期コード領域のサイズ
+ *  @pc: 領域内の起動関数のオフセット
+ *
+ *  正常終了時は 0、失敗時は -1 を返す
+ */
 int move_to_user_mode(uint64_t start, uint64_t size, uint64_t pc)
 {
     assert(size <= PAGE_SIZE);
+    debug("start: 0x%lx, size: 0x%lx, pc: 0x%lx", start, size, pc);
 
     struct task_struct *cur = myproc();
     struct trapframe *regs = task_pt_regs(cur);
@@ -609,7 +647,7 @@ int move_to_user_mode(uint64_t start, uint64_t size, uint64_t pc)
         release(&cur->mm->lock);
         return -1;
     }
-
+    debug("cur->mm->pgd: 0x%lx", cur->mm->pgd);
     cur->mm->sz = cur->mm->codesz = PAGE_SIZE;
     memmove(code_page, (void *)start, size);
     set_pgd(cur->mm->pgd);
@@ -617,7 +655,6 @@ int move_to_user_mode(uint64_t start, uint64_t size, uint64_t pc)
     cur->cwd = namei("/", AT_FDCWD);
     assert(cur->cwd);
     release(&cur->mm->lock);
-
     fsinit(ROOTDEV);
 #ifdef CONFIG_FAT
     fsinit(SECONDDEV);
@@ -633,10 +670,11 @@ int copy_process(uint64_t clone_flags, uint64_t fn, uint64_t arg, const char *na
 {
     struct task_struct *p = 0, *cur = myproc();
     int i, pid;
-
+    trace("9");
     acquire(&sched_lock);
+    debug("flags: 0x%lx, fn: 0x%lx, arg: 0x%lx, name: %s", clone_flags, fn, arg, name);
     for (i = 0; i < NR_TASKS; i++) {
-        pid = (lastpid+i+i) % NR_TASKS;
+        pid = (lastpid+1+i) % NR_TASKS;
         p = tasks[pid];
         assert(p);
         if (p->state == TASK_UNUSED) {
@@ -645,6 +683,7 @@ int copy_process(uint64_t clone_flags, uint64_t fn, uint64_t arg, const char *na
         }
     }
     if (i == NR_TASKS) {
+        trace("n");
         release(&sched_lock);
         return -1;
     }
@@ -659,6 +698,7 @@ int copy_process(uint64_t clone_flags, uint64_t fn, uint64_t arg, const char *na
 
     // カーネルスレッド
     if (clone_flags == PF_KTHREAD) {
+        debug("kthread");
         p->cpu_context.x19 = fn;
         p->cpu_context.x20 = arg;
     } else {
@@ -667,11 +707,13 @@ int copy_process(uint64_t clone_flags, uint64_t fn, uint64_t arg, const char *na
         childregs->regs[0] = 0;     // fork()の子側のリターン値
         // ユーザスレッド
         if (clone_flags & PF_UTHREAD) {
+            debug("uthread");
             p->mm = cur->mm;
             __atomic_add_fetch(&p->mm->ref, 1, __ATOMIC_SEQ_CST);
             childregs->sp = arg;
         // ユーザプロセス
         } else {
+            debug("uproc");
             struct mm_struct *mm = alloc_mm();
             if (!mm) {
                 error("no mm");
@@ -708,7 +750,8 @@ int copy_process(uint64_t clone_flags, uint64_t fn, uint64_t arg, const char *na
     p->parent = cur;
     p->state = TASK_RUNNABLE;
 
+    trace("o");
     release(&sched_lock);
-
+    debug("p->id %d ok", p->pid);
     return pid;
 }

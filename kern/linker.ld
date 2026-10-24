@@ -17,9 +17,9 @@ SECTIONS
     .text : AT(_phys_start + (_boot_end - _boot_start)) {
         *(.text)
     }
-
     PROVIDE(etext = .);
     .rodata : { *(.rodata) }
+
     PROVIDE(data = .);
     .data : { *(.data) }
     . = ALIGN(4096);

@@ -1,0 +1,8 @@
+.section ".user_program", "a"
+
+.globl  _user_begin
+.globl  _user_end
+
+_user_begin:
+    .incbin   "obj/user_init/user.bin"
+_user_end:

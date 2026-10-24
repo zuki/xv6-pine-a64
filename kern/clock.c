@@ -48,8 +48,8 @@ static inline void update_times(void)
 void clock_init(void)
 {
     arm_vtimer_init();
-    irq_register(GIC_PPI(11), clock_intr, 0);
-    irq_enable(GIC_PPI(11));
+    irq_register(IRQ_ARM_VTIMER, clock_intr, 0);
+    irq_enable(IRQ_ARM_VTIMER);
 
     initlock(&clocklock, "clock");
     if (rtc_gettime(&xtime) < 0) {

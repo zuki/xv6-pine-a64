@@ -2,6 +2,31 @@
 #include <arm.h>
 #include <irq.h>
 #include <console.h>
+#include <vectors.h>
+
+// must match entry.h
+const char *entry_error_messages[] = {
+    [SYNC_INVALID_EL1t]     = "SYNC_INVALID_EL1t",
+    [IRQ_INVALID_EL1t]      = "IRQ_INVALID_EL1t",
+    [FIQ_INVALID_EL1t]      = "FIQ_INVALID_EL1t",
+    [ERROR_INVALID_EL1t]    = "ERROR_INVALID_EL1t",
+
+    [SYNC_INVALID_EL1h]     = "SYNC_INVALID_EL1h",
+    [FIQ_INVALID_EL1h]      = "FIQ_INVALID_EL1h",
+    [ERROR_INVALID_EL1h]    = "ERROR_INVALID_EL1h",
+
+    [FIQ_INVALID_EL0_64]    = "FIQ_INVALID_EL0_64",
+    [ERROR_INVALID_EL0_64]  = "ERROR_INVALID_EL0_64",
+
+    [SYNC_INVALID_EL0_32]   = "SYNC_INVALID_EL0_32",
+    [IRQ_INVALID_EL0_32]    = "IRQ_INVALID_EL0_32",
+    [FIQ_INVALID_EL0_32]    = "FIQ_INVALID_EL0_32",
+    [ERROR_INVALID_EL0_32]  = "ERROR_INVALID_EL0_32",
+
+    [SYNC_ERROR]            = "Unhandled EL0 sync exception",
+    [SYSCALL_ERROR]         = "SYSCALL_ERROR",
+    [DATA_ABORT_ERROR]      = "Unhandled EL0 data abort (after kernel's trying)"
+};
 
 static void (*handler[IRQ_LINES])(void *);
 static void *params[IRQ_LINES];
@@ -151,7 +176,7 @@ void irq_enable(int i)
     int idx = i / 32;
     put32(GICD_ISENABLERn + 4 * idx, 1 << (i % 32));
 
-    debug("GICD_ISENABLER[%d]: 0x%08x", idx, get32(GICD_ISENABLERn + 4 * idx));
+    trace("GICD_ISENABLER[%d]: 0x%08x", idx, get32(GICD_ISENABLERn + 4 * idx));
 }
 
 
@@ -186,23 +211,26 @@ void irq_handler(void/*int user_mode */)
 {
     int nack = 0;
     uint32_t iar = get32(GICC_IAR);
+    uint32_t core = ((iar & GICC_IAR_CPUID__MASK) >> GICC_IAR_CPUID__SHIFT);
     uint32_t i = iar & GICC_IAR_INTERRUPT_ID__MASK;
     if (i < IRQ_LINES) {
         if (i > 15) {
-            /* Peripheral interrupts (PPI and SPI). */
+            /* Peripheral interrupts (PPI & SPI). */
+            if (i > 31)
+                debug("irq %d fired", i);
+#if 0
             if (i == IRQ_UART0) {
                 debug("IRQ_UART0 fired");
             } else if (i == IRQ_UART0) {
                 debug("IRQ_UART0 fired");
             }
+#endif
             nack += handle1(i);
         } else {
             /* Software generated interrupts (SGI). */
-            uint32_t core =
-                (iar & GICC_IAR_CPUID__MASK) >> GICC_IAR_CPUID__SHIFT;
-
-            panic("unimplemented, irq %d, core %d", i, core);
+            error("unimplemented, irq %d, core %d", i, core);
         }
+        // フラグを消去
         put32(GICC_EOIR, iar);
     }
 
@@ -227,4 +255,12 @@ void irq_send_sgi_to_me(uint32_t irqno)
     put32(GICD_SGIR, (2 << 24) | (irqno & 0xf));
 }
 
+void show_invalid_entry_message(int type, uint64_t esr,
+    uint64_t elr, uint64_t far)
+{
+    error("%s, esr: 0x%016llx, elr: 0x%016llx, far: 0x%016llx",
+        entry_error_messages[type], esr, elr, far);
+    error("online esr decoder: %s0x%016llx", "https://esr.arm64.dev/#", esr);
+    //show_stack(myproc(), "");
+}
 

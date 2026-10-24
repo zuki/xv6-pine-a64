@@ -22,6 +22,7 @@
 // 呼び出しではkconsoleは無効化される。
 // #define KCONSOLE_PRINTF        1        // デモ用でexperimental
 
+// デバイス番号 : sutruct inode.dev
 #define DEV_RAMDISK     1       // ramdisk
 #define DEV_VIRTDISK    2       // qemuのvirtioデバイス
 // 以下はSDカード用（物理デバイスまたはエミュレートデバイス）
@@ -45,9 +46,10 @@
 #define MALLOC_PAGES    (8*1024*1024 / PAGE_SIZE)
 
 // 大きなユーザ仮想メモリ。ただし、freecount()のためにusertestsは遅くなる
-#define USER_TOP     (128 * 1024 * 1024) // == ユーザスタックのトップ。128MBのユーザ仮想アドレス
-#define USER_MAX_STACK  (1 * 1024 * 1024)  // バイト単位、ページアライン
-#define MAX_TASK_USER_PAGES (USER_TOP / PAGE_SIZE)   // タスクあたりの最大ユーザページ数(32,768)
+#define USER_BASE       0x1000
+#define USER_TOP        0x0001000000000000 // == ユーザスタックのトップ。ユーザ仮想アドレス
+#define USER_MAX_STACK  0x100000  // バイト単位、ページアライン (1MB)
+#define MAX_TASK_USER_PAGES (USER_TOP / PAGE_SIZE)   // タスクあたりの最大ユーザページ数 0x10_00000000
 #define MAX_TASK_KER_PAGES  96      // タスクあたりの最大カーネルページ数  (128 seems to corrupt kernel stack
 
 // 小さなユーザ仮想メモリ（問題なし: userstests,slider,etc. メモリ不足: liteNesなど)
@@ -58,11 +60,10 @@
 
 // 多くのファイルで必要なので mmu.h から　ここに移した
 #define VA_START    0xFFFF000000000000
-#define V2P(x)    ((unsigned long)x - VA_START)           // カーネル仮想アドレスから物理アドレスに変換
-#define P2V(x)    ((void *)((unsigned long)x + VA_START)) // 物理アドレスからカーネル仮想アドレスに変換
+#define V2P(x)    ((unsigned long)(x) - VA_START)           // カーネル仮想アドレスから物理アドレスに変換
+#define P2V(x)    ((void *)((unsigned long)(x) + VA_START)) // 物理アドレスからカーネル仮想アドレスに変換
 
 #define V2P_WO(x) ((x) - VA_START)      /* Same as V2P, but without casts */
 #define P2V_WO(x) ((x) + VA_START)      /* Same as P2V, but without casts */
-
 
 #endif

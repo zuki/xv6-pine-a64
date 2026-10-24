@@ -76,6 +76,7 @@ static int dupfd(int fd, int from)
 /* int dup(int oldfd); */
 int sys_dup(int fd)
 {
+    debug("fd: %d", fd);
     return dupfd(fd, 0);
 }
 
@@ -462,6 +463,7 @@ int sys_openat(int dirfd, uint64_t pathp/* user va*/, int flags, mode_t mode)
     if ((error = check_fdcwd(path, dirfd)) < 0)
         return error;
 
+    debug("path: %s, flags: 0x%x, mode: 0x%lx", path, flags, mode);
     return fileopen(path, dirfd, flags, mode);
 }
 
@@ -502,6 +504,7 @@ int sys_mknodat(int dirfd, uint64_t pathp/* user va*/, mode_t mode, dev_t dev)
     if ((error = check_fdcwd(path, dirfd)) < 0)
         return error;
 
+    debug("path: %s, mode: 0x%lx, dev: 0x%lx", path, mode, dev);
     return filemknod(path, mode, (device_t)dev);
 }
 
@@ -532,9 +535,12 @@ int sys_execve(uint64_t pathp/* user va*/, uint64_t argvp/* user va*/, uint64_t 
     char *argv[MAXARG], *envp[MAXARG];
     uint64_t arg_p, env_p;
     int argc = 0, envc = 0, error;
+    //uint64_t tmp;
 
     if (argstr(pathp, path, MAXPATH) < 0)
         return -EIO;
+
+    debug("path: %s, argvp: 0x%lx, envpp: 0x%lx", path, argvp, envpp);
 
     memset(argv, 0, sizeof(argv));
     if (argvp != 0 && argvp != -1) {
@@ -545,16 +551,17 @@ int sys_execve(uint64_t pathp/* user va*/, uint64_t argvp/* user va*/, uint64_t 
                 goto bad;
             }
             if (argptr(argvp + argc * sizeof(uint64_t), (char *)&arg_p, sizeof(uint64_t)) < 0) {
-                error("argptr  argc_p[%d]: %d", argc);
+                error("argptr error: arg_p[%d]: 0x%lx", argc, arg_p);
                 error = -EFAULT;
                 goto bad;
             }
+            trace("arg_p: 0x%lx", arg_p);
             if (arg_p == 0) {
                 argv[argc] = 0;
                 break;
             }
             if ((error = argstr(arg_p, buf, MAXPATH)) < 0) {
-                error("argstr argv[%d]", argc);
+                error("argstr error : argv[%d]", argc);
                 error = -EIO;
                 goto bad;
             }
@@ -579,7 +586,7 @@ int sys_execve(uint64_t pathp/* user va*/, uint64_t argvp/* user va*/, uint64_t 
                 goto bad;
             }
             if (argptr(envpp + envc * sizeof(uint64_t), (char *)&env_p, sizeof(uint64_t)) < 0) {
-                error("argptr envc_p[%d]: %d", envc);
+                error("argptr error: env_p[%d]: 0x%lx", envc, env_p);
                 error = -EFAULT;
                 goto bad;
             }
@@ -588,7 +595,7 @@ int sys_execve(uint64_t pathp/* user va*/, uint64_t argvp/* user va*/, uint64_t 
                 break;
             }
             if ((error = argstr(env_p, buf, MAXPATH)) < 0) {
-                error("etchstr envp[%d]", envc);
+                error("etchstr error: envp[%d]", envc);
                 error = -EIO;
                 goto bad;
             }
@@ -604,7 +611,7 @@ int sys_execve(uint64_t pathp/* user va*/, uint64_t argvp/* user va*/, uint64_t 
         envc = 0;
     }
 
-    error = exec(path, argv, envp);
+    error = exec(path, argv, argc, envp, envc);
     for (int i = 0; i < argc; i++) {
         kmfree(argv[i]);
     }

@@ -1,9 +1,4 @@
-#CROSS := /opt/homebrew/bin/aarch64-elf
-CROSS := /Applications/ArmGNUToolchain/14.3.rel1/aarch64-none-elf/bin/aarch64-none-elf
-CC := $(CROSS)-gcc
-LD := $(CROSS)-ld
-OBJDUMP := $(CROSS)-objdump
-OBJCOPY := $(CROSS)-objcopy
+-include config.mk
 
 # -fno-pie -fno-pic:
 #     Remove .got and data.rel sections.
@@ -23,7 +18,7 @@ OBJCOPY := $(CROSS)-objcopy
 # -MMD -MP:
 #     generate .d files
 
-CFLAGS := -Wall -O2 -std=gnu11 \
+CFLAGS := -Wall -std=gnu11 \
           -fno-pie -fno-pic -fno-stack-protector \
 	  -fno-zero-initialized-in-bss -fstack-usage \
           -static -fno-builtin -nostdlib -nostdinc -ffreestanding -nostartfiles \
@@ -32,6 +27,11 @@ CFLAGS := -Wall -O2 -std=gnu11 \
 
 CFLAGS += -mlittle-endian -mcmodel=small -mno-outline-atomics
 CFLAGS += -mcpu=cortex-a53 -mtune=cortex-a53
+
+CFLAGS0 = $(CFLAGS) -O2
+CFLAGS1 = $(CFLAGS) -O0
+
+#%user.c.o: CFLAGS0 = $(CFLAGS) -O0
 
 SRC_DIRS := kern
 BUILD_DIR = obj
@@ -49,13 +49,13 @@ DEPS := $(OBJS:.o=.d)
 
 $(BUILD_DIR)/%.c.o: %.c
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS0) -c -o $@ $<
 $(BUILD_DIR)/%.S.o: %.S
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS0) -c -o $@ $<
 
-$(KERN_ELF): kern/linker.ld $(OBJS)
-	$(LD) -o $@ -T $< $(OBJS)
+$(KERN_ELF): kern/linker.ld $(OBJS) $(USER_BIN)
+	$(LD) -o $@ -T $< $(OBJS) $(USER_BIN)
 	$(OBJDUMP) -S -D $@ > $(basename $@).asm
 	$(OBJDUMP) -x $@ > $(basename $@).hdr
 
@@ -76,6 +76,9 @@ tftp: $(KERN_IMG)
 	mkimage -f xv6.its xv6.itb
 	sudo cp xv6.itb /private/tftpboot/
 
-.PHONY: clean
+.PHONY: clean clean-user-init
 clean:
 	rm -r $(BUILD_DIR)
+
+clean-user-init:
+	rm -f $(USER_INIT_ELF) $(USER_INIT_BIN)

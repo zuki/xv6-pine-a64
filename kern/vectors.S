@@ -5,7 +5,7 @@
 #include <sched.h>
 #include <vectors.h>
 #include <sysregs.h>
-#include <trap.h>
+#include <irq.h>
 
 // ハンドラのない割り込みのエラーハンドラ
 .macro handle_invalid_entry el, type
@@ -15,8 +15,7 @@
     orr   x27, x27, #1          // sctlr_el1 bit0: MMUはオンかオフか. cf sysregs.h
     cmp   x27, #0
     b.eq  99f
-    //mov x27, #LOW_MEMORY      // MMUはオン、仮想アドレスを使う
-    //mov x28, #VA_START
+                                // MMUはオン、仮想アドレスを使う
     ldr   x27, =boot_stacks     // boot_stacks[NCPU][4096]
     add   x27, x27, PAGE_SIZE
     mov   x28, #0
@@ -205,13 +204,13 @@ error_invalid_el0_32:
 // EL1での割り込み
 el1_irq:
     kernel_entry 1    // レジスタ退避
-    bl  trap          // トラップ処理実行
+    bl  irq_handler   // 割り込み処理実行
     kernel_exit 1     // レジスタ復元
 
 // EL0での割り込み（例外）
 el0_irq:
     kernel_entry 0    // レジスタ退避
-    bl  trap          // トラップ実行
+    bl  irq_handler   // 割り込み処理実行
     kernel_exit 0     // レジスタ復元
 
 // システムコールの呼び出し (割り込みベクタより)
@@ -231,7 +230,7 @@ stbl    .req    x27                     // syscallテーブルポインタ
 
 // システムコール処理関数（el0_syncから)
 el0_svc:
-    // fxl: 今のところ、x0-x8はカーネルにより変更されていない（依然としてEL0のまま）
+    // x0-x8はカーネルにより変更されていない（依然としてEL0のまま）
     ldr   stbl, =syscalls               // syscallテーブルポインタをロード(syscall.c)
     uxtw  scno, w8                      // syscall番号はw8にセットされている
     mov   sc_nr, #__NR_syscalls

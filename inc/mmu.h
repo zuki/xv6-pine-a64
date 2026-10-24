@@ -134,9 +134,10 @@
 #define PTE_FLAGS_HIGH(pte) ((uint64_t)(pte) &  0xFFFF000000000000UL)
 
 // extract perm bits from pte
-#define PTE_TO_PERM(x)          (x & (unsigned long)(MM_AP_MASK | MM_XN_MASK))
-// extract pa from pte. assuming pa within 32bits TODO: fix this for larger phys mem system...
-#define PTE_TO_PA(x)            ((x) & (0xffffffff) & PAGE_MASK)
+#define PTE_TO_PERM(x)      (x & (unsigned long)(MM_AP_MASK | MM_XN_MASK))
+// extract pa from pte.
+//#define PTE_TO_PA(x)        (((x) >> 12) << 12)
+#define PTE_TO_PA(x)        (PTE_ADDR(x))
 
 /* Translation Control Register */
 #define TCR_T0SZ        (64 - 48)

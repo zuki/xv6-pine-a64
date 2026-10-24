@@ -9,3 +9,4 @@
     - [SDカードを使えるようにする](memos/mmc.md)
     - [カーネル仮想アドレスを高位アドレスに変更](memos/kernel_va.md)
     - [プロセスを実行](memos/sched.md)
+    - [v6ファイルシステムイメージを作成する](memos/v6_img.md)
