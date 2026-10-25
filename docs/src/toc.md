@@ -8,3 +8,10 @@
     - [演習4: マルチコアとロック](memos/lab4.md)
     - [SDカードを使えるようにする](memos/mmc.md)
     - [カーネル仮想アドレスを高位アドレスに変更](memos/kernel_va.md)
+    - [プロセスを実行](memos/sched.md)
+    - [v6ファイルシステムイメージを作成する](memos/v6_img.md)
+    - [プロセスロジックをxv6で再作成](memos/xv6.md)
+
+- [昔の実装メモ](old/README.md)
+    - [uboot上でxv6を実行](old/run_xv6_on_uboot.md)
+    - [sd.img](old/sd_img.md)

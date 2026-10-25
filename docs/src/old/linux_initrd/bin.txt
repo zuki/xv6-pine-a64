@@ -1,0 +1,1 @@
+lrwxrwxrwx 1 vagrant vagrant 7 Sep 17 16:44 bin -> usr/bin

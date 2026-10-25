@@ -1,0 +1,1 @@
+BOOT_IMAGE=/boot/vmlinuz-5.15.0-83-generic root=UUID=97d40779-9bee-4a51-9ad1-c56895f577ca ro console=tty1 console=ttyS0

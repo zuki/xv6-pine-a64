@@ -1,24 +1,22 @@
+#include <types.h>
 #include <trap.h>
-
 #include <arm.h>
 #include <sysregs.h>
 #include <mmu.h>
 #include <irq.h>
-
 #include <uart.h>
 #include <console.h>
 #include <clock.h>
 #include <timer.h>
+#include <syscall.h>
 
-#if 0
 void trap_init(void)
 {
-    extern char vectors[];
-    load_vbar_el1(vectors);
+    //extern char vectors[];
+    //load_vbar_el1(vectors);
     lesr(0);
-    //info("trap_init ok");
+    info("trap_init ok");
 }
-#endif
 
 void trap(struct trapframe *tf)
 {
@@ -27,9 +25,9 @@ void trap(struct trapframe *tf)
     uint64_t far = rfar();
     uint64_t elr = relr();
     int ec  = (int)(esr >> EC_SHIFT);
-    //int iss = (int)(esr & ISS_MASK);
+    int iss = (int)(esr & ISS_MASK);
     int il  = (int)(esr & IL_MASK);
-    //int dfs = (int)(iss & 0x3f);
+    int dfs = (int)(iss & 0x3f);
 
    /* Clear esr. */
     lesr(0);
@@ -45,14 +43,12 @@ void trap(struct trapframe *tf)
         break;
 
     case EC_SVC64:
-#if 0
         if (iss == 0) {
             tf->x[0] = syscall1(tf);
             //check_pending_signal();
         } else {
             warn("unexpected svc iss 0x%x", iss);
         }
-#endif
         debug("triger syscall");
         break;
 
@@ -80,19 +76,34 @@ void trap(struct trapframe *tf)
         }
 #endif
         debug("triger ec: %d at elr: 0x%llx with far: 0x%llx", ec, elr, far);
-        //exit(1);
+        exit(1);
         break;
     case EC_ALIGNMENT:  // 0x22 = 34
         error("SP alignment fault exception at elr: 0x%llx with far: 0x%llx", elr, far);
         panic("abort");
-        //exit(1);
+        exit(1);
         break;
     default:
         debug("unknown trap code: %d at elr: 0x%llx with far: 0x%llx", ec, elr, far);
         //dump_tf(tf);
-        //exit(1);
-        panic("unknown");
+        exit(1);
+        //panic("unknown");
     }
+}
 
+void dump_tf(struct trapframe *tf)
+{
+    cprintf("=== dump trapframe        ===\n");
+    cprintf("  spsr: 0x%llx\n", tf->spsr);
+    cprintf("   elr: 0x%llx\n", tf->elr);
+    cprintf("    sp: 0x%llx\n", tf->sp);
+    cprintf(" tpidr: 0x%llx\n", tf->tpidr);
+    cprintf("    x1: 0x%llx\n", tf->x[1]);
+    cprintf("    x2: 0x%llx\n", tf->x[2]);
+    cprintf("    x3: 0x%llx\n", tf->x[3]);
+    cprintf("    x8: 0x%llx\n", tf->x[8]);
+    cprintf("   x29: 0x%llx\n", tf->x[29]);
+    cprintf("   x30: 0x%llx\n", tf->x[30]);
+    cprintf("===-----------------------===\n");
 }
 

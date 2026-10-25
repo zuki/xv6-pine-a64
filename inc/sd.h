@@ -2,10 +2,10 @@
 #define INC_SD_H
 
 #include <types.h>
+#include <param.h>
 #include <buf.h>
 
 #define PARTITIONS      4       // 最大パーティション数
-#define SECTOR_SIZE     512     // セクタサイズ（バイト）
 
 #define SDMAJOR         0       // SD card major block device
 #define FATMINOR        0       // FAT partition [0,0]

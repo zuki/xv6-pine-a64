@@ -21,6 +21,8 @@
 #define ULLONG_MAX  (2ULL*LLONG_MAX+1)
 #define SIZE_MAX    ULLONG_MAX
 
+#ifndef __ASSEMBLER__
+
 typedef char            int8_t;
 typedef unsigned char   uint8_t;
 typedef short           int16_t;
@@ -76,6 +78,7 @@ typedef unsigned long long  uvlong;
 
 typedef uint32_t            u32int;
 
+#endif
 
 #define true            1
 #define false           0

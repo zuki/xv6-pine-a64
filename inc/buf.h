@@ -19,4 +19,9 @@ struct buf {
     uint8_t *data;
 };
 
+void binit(void);
+struct buf* bread(uint32_t dev, uint32_t bno);
+void bwrite(struct buf *b);
+void brelse(struct buf *b);
+
 #endif

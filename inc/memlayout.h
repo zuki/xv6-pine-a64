@@ -1,12 +1,14 @@
 #ifndef INC_MEMLAYOUT_H
 #define INC_MEMLAYOUT_H
 
+#include <param.h>
+
 // ---------------- memory layout --------------------------- //
 #define PHYS_BASE 0x40000000                /* 物理メモリ最下位アドレス */
 #define PHYS_TOP  0x80000000                /* 物理メモリ最上位アドレス : 1GB */
 #define PHYS_SIZE 0x40000000
 
-#define KERN_BASE 0x0FFFF000000000000       /* カーネル仮想アドレス開始アドレス */
+#define KERN_BASE VA_START      /* カーネル仮想アドレス開始アドレス */
 #define KERN_LINK (KERN_BASE+0x42000000)    /* カーネルリンクアドレス */
 
 #define DEVICE_BASE 0x00000000              /* デバイス基底アドレス  */
@@ -43,16 +45,25 @@
  * (DEVICE_BASE)
  */
 
+/* ユーザメモリレイアウト.
+ *  USER_TOP    -> ---------------------------   0x0800_0000     (128MB)
+ *                        スタック (1MB)
+ *
+ *  USER_MAX_STACK -> ---------------------------   0x0500_0000　<- sp
+ *                        ガードページ (4KB)
+ *                    ---------------------------
+ *
+ *                         ヒープ領域
+ *                       ガードページ (4KB)
+ *                    ---------------------------
+ *                         コード領域
+ *  USER_BASE -> ---------------------------    0x0000_0000
+ */
+
+#define USER_BASE       0x0
+#define USER_TOP        0x0001000000000000 // == ユーザスタックのトップ。ユーザ仮想アドレス
 
 #define V2P_WO(x) ((x) - KERN_BASE)      /* Same as V2P, but without casts */
 #define P2V_WO(x) ((x) + KERN_BASE)      /* Same as P2V, but without casts */
-
-#ifndef __ASSEMBLER__
-
-#include <types.h>
-#define V2P(a) (((uint64_t) (a)) - KERN_BASE)
-#define P2V(a) ((void *)(((char *) (a)) + KERN_BASE))
-
-#endif
 
 #endif

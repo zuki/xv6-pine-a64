@@ -46,7 +46,7 @@
                                 (MT_NORMAL_NC_FLAGS << (8 * MT_NORMAL_NC)))
 
 /* PTE flags */
-#define PTE_P           0x1
+#define PTE_VALID       0x1
 
 #define PTE_TABLE       0x3         /* Table in level 0/1/2 */
 #define PTE_BLOCK       0x1         /* Block in level 1/2 */
@@ -85,10 +85,10 @@
 #define L1_BLOCK_DEVICE  (0 << 2)  // MAIRのインデックス0 (Device Memory)
 
 /* Address in table or block entry, only support 32 bit physical address. */
-#define PTE_ADDR(pte)   ((uint64_t)(pte) & ~0xFFFF000000000FFFUL)
-#define PTE_FLAGS(pte)  ((uint64_t)(pte) &  0xFFFF000000000FFFUL)
+#define PTE_ADDR(pte)       ((uint64_t)(pte) & ~0xFFFF000000000FFFUL)
+#define PTE_FLAGS(pte)      ((uint64_t)(pte) &  0xFFFF000000000FFFUL)
 #define PTE_FLAGS_LOW(pte)  ((uint64_t)(pte) &  0x0000000000000FFFUL)
-#define PTE_FLAGS_HIGH(pte)  ((uint64_t)(pte) &  0xFFFF000000000000UL)
+#define PTE_FLAGS_HIGH(pte) ((uint64_t)(pte) &  0xFFFF000000000000UL)
 
 /* Translation Control Register */
 #define TCR_T0SZ        (64 - 48)

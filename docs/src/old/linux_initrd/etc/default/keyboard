@@ -1,0 +1,10 @@
+# KEYBOARD CONFIGURATION FILE
+
+# Consult the keyboard(5) manual page.
+
+XKBMODEL="applealu_jis"
+XKBLAYOUT="jp"
+XKBVARIANT=""
+XKBOPTIONS="terminate:ctrl_alt_bksp"
+
+BACKSPACE="guess"

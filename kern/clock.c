@@ -22,7 +22,8 @@ void clock_intr(void *param)
     // pendingビットをクリア
     arm_vtimer_reset();
     if ((++jiffies % 100) == 0)
-        cprintf("*");
+        ; // no op
+        //cprintf("*");
     // 時刻更新処理
     //update_proc_time();
 }

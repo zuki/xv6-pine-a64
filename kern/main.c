@@ -2,18 +2,21 @@
 #include <arm.h>
 #include <string.h>
 #include <console.h>
-#include <kalloc.h>
+#include <mm.h>
 #include <irq.h>
 #include <timer.h>
 #include <arm_timer.h>
+#include <buf.h>
+#include <file.h>
 #include <clock.h>
 #include <trap.h>
 #include <param.h>
 #include <memlayout.h>
 #include <mmu.h>
 #include <rtc.h>
+#include <proc.h>
 #include <peripherals/uart.h>
-#include <utils.h>
+#include <cache.h>
 #include <sd.h>
 
 int core_flags[NCPU] = { 0 };
@@ -89,8 +92,6 @@ void main(void)
     asm volatile("isb" : : : "memory");
 #endif
 
-
-
     // bssの初期化
     uint64_t *bss = &_bss_start;
     while (bss < &_bss_end) {
@@ -99,41 +100,22 @@ void main(void)
 
     // カーネルページアドレスをkpgrに再セット
     set_kpgdir();
-
-    alloc_init();
     irq_init_gicd();
     irq_init_gicc(0);
     console_init();
+    mm_init();
     clock_init();
+    binit();
+    fileinit();
+    proc_init();
     sd_init();
     rtc_init();
-    start_secondary_cores();
-    enable_irq();
+    user_init();
+    //start_secondary_cores();
     timer_init(0);       // ap
-
-
-#if 0
-    // 同期エラーを発生させてtrapが発生するかチェック -> voctorsのメモリ設定の修正で発生
-    asm volatile("brk #0" : : : "memory");
-    // timer値がカウントダウンするかチェック -> する
-    delay(1000);
-    debug("timer0 count: 0x%x", get32(TMR0_CUR_VALUE_REG));
-    debug("timer1 count: 0x%x", get32(TMR1_CUR_VALUE_REG));
-    // 割り込みが通知されるかチェック -> されない
-    debug("ISPENDR[1]: 0x%x", get32(GICD_ICPENDRn + 4));
-    delay(12000000);
-    // timerで保留フラグが立つかチェック -> 立つ
-    debug("timer pending: 0x%x", get32(TMR_IRQ_STA_REG));
-    // SGI割り込みを自分自身に送り割り込みが発生するかチェック -> 発生
-    irq_send_sgi_to_me(1);
-    // カウンタ周波数を取得 -> 24MHz
-    debug("cntfrq_el0: 0x%x", get_cntfrq_el0());
-    // uartに直接書き込み、割り込みが発生するか確認　-> 発生
-    put32(UART_THR(0), 0x23);
-    delay(100);
-    put32(UART_THR(0), 0x23);
-
-#endif
+    trap_init();
+    enable_irq();
+    scheduler();
 
     while (1) ;
 }
@@ -150,8 +132,9 @@ void secondary_main(int core)
 
     irq_init_gicc(core);
     timer_init(core);
+    trap_init();
     enable_irq();
-
+    scheduler();
     while (1)
         ;
 

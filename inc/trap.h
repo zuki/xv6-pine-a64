@@ -12,5 +12,6 @@ struct trapframe {
 
 void trap(struct trapframe *);
 void trap_init(void);
+void dump_tf(struct trapframe *tf);
 
 #endif

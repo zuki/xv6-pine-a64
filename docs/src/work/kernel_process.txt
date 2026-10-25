@@ -1,0 +1,125 @@
+ffff000042012af0 <kernel_process>:
+ffff000042012af0:       a9bb7bfd        stp     x29, x30, [sp, #-80]!
+ffff000042012af4:       910003fd        mov     x29, sp
+ffff000042012af8:       a90153f3        stp     x19, x20, [sp, #16]
+ffff000042012afc:       90000074        adrp    x20, ffff00004201e000 <_user_begin>     // x20 = _user_begin
+ffff000042012b00:       91000294        add     x20, x20, #0x0
+ffff000042012b04:       b0000053        adrp    x19, ffff00004201b000 <syscalls+0x480>  // x19 = 4201b890
+ffff000042012b08:       91224273        add     x19, x19, #0x890
+ffff000042012b0c:       a9025bf5        stp     x21, x22, [sp, #32]
+ffff000042012b10:       b0000055        adrp    x21, ffff00004201b000 <syscalls+0x480>  // x21 = 4201ba88
+ffff000042012b14:       912a22b5        add     x21, x21, #0xa88
+ffff000042012b18:       a90363f7        stp     x23, x24, [sp, #48]
+ffff000042012b1c:       91010296        add     x22, x20, #0x40                         // x22 = process
+ffff000042012b20:       a9046bf9        stp     x25, x26, [sp, #64]
+ffff000042012b24:       d000021a        adrp    x26, ffff000042054000 <itable+0x1930>   // x26 = 42054290 (g_channel)
+ffff000042012b28:       910a4340        add     x0, x26, #0x290
+ffff000042012b2c:       97ffffa5        bl      ffff0000420129c0 <acquire>
+ffff000042012b30:       90000079        adrp    x25, ffff00004201e000 <_user_begin>
+ffff000042012b34:       91073339        add     x25, x25, #0x1cc                        // x25 = _user_end
+ffff000042012b38:       aa1303e1        mov     x1, x19                                 // 以下、debug()
+ffff000042012b3c:       aa1503e0        mov     x0, x21
+ffff000042012b40:       97ffe888        bl      ffff00004200cd60 <strcmp>
+ffff000042012b44:       34000800        cbz     w0, ffff000042012c44 <kernel_process+0x154>
+ffff000042012b48:       97ffd66c        bl      ffff0000420084f8 <cpuid>
+ffff000042012b4c:       b0000058        adrp    x24, ffff00004201b000 <syscalls+0x480>
+ffff000042012b50:       91100318        add     x24, x24, #0x400
+ffff000042012b54:       b0000057        adrp    x23, ffff00004201b000 <syscalls+0x480>
+ffff000042012b58:       912282f7        add     x23, x23, #0x8a0
+ffff000042012b5c:       2a0003e1        mov     w1, w0
+ffff000042012b60:       aa1803e2        mov     x2, x24
+ffff000042012b64:       aa1703e0        mov     x0, x23
+ffff000042012b68:       528006c3        mov     w3, #0x36                       // #54
+ffff000042012b6c:       97fffe41        bl      ffff000042012470 <cprintf1>
+ffff000042012b70:       aa1603e3        mov     x3, x22
+ffff000042012b74:       aa1403e1        mov     x1, x20
+ffff000042012b78:       aa1903e2        mov     x2, x25
+ffff000042012b7c:       d0000040        adrp    x0, ffff00004201c000 <__func__.0+0x788>
+ffff000042012b80:       91244000        add     x0, x0, #0x910
+ffff000042012b84:       d0000056        adrp    x22, ffff00004201c000 <__func__.0+0x788>
+ffff000042012b88:       912b82d6        add     x22, x22, #0xae0
+ffff000042012b8c:       97fffe39        bl      ffff000042012470 <cprintf1>
+ffff000042012b90:       aa1603e0        mov     x0, x22
+ffff000042012b94:       97fffe37        bl      ffff000042012470 <cprintf1>
+ffff000042012b98:       910a4340        add     x0, x26, #0x290
+ffff000042012b9c:       97ffff4d        bl      ffff0000420128d0 <release>
+ffff000042012ba0:       aa1303e1        mov     x1, x19
+ffff000042012ba4:       aa1503e0        mov     x0, x21
+ffff000042012ba8:       97ffe86e        bl      ffff00004200cd60 <strcmp>
+ffff000042012bac:       35000040        cbnz    w0, ffff000042012bb4 <kernel_process+0xc4>
+ffff000042012bb0:       14000000        b       ffff000042012bb0 <kernel_process+0xc0>
+ffff000042012bb4:       cb140321        sub     x1, x25, x20                    // end - begin
+ffff000042012bb8:       aa1403e0        mov     x0, x20                         // begin
+ffff000042012bbc:       d2800802        mov     x2, #0x40                       // process - begin (#64)
+ffff000042012bc0:       97ffccd8        bl      ffff000042005f20 <move_to_user_mode>
+ffff000042012bc4:       37f80480        tbnz    w0, #31, ffff000042012c54 <kernel_process+0x164>
+ffff000042012bc8:       910a4340        add     x0, x26, #0x290
+ffff000042012bcc:       b0000054        adrp    x20, ffff00004201b000 <syscalls+0x480>
+ffff000042012bd0:       91226294        add     x20, x20, #0x898
+ffff000042012bd4:       97ffff7b        bl      ffff0000420129c0 <acquire>
+ffff000042012bd8:       aa1303e1        mov     x1, x19
+ffff000042012bdc:       aa1403e0        mov     x0, x20
+ffff000042012be0:       97ffe860        bl      ffff00004200cd60 <strcmp>
+ffff000042012be4:       340006c0        cbz     w0, ffff000042012cbc <kernel_process+0x1cc>
+ffff000042012be8:       97ffd644        bl      ffff0000420084f8 <cpuid>
+ffff000042012bec:       2a0003e1        mov     w1, w0
+ffff000042012bf0:       aa1803e2        mov     x2, x24
+ffff000042012bf4:       52800783        mov     w3, #0x3c                       // #60
+ffff000042012bf8:       aa1703e0        mov     x0, x23
+ffff000042012bfc:       97fffe1d        bl      ffff000042012470 <cprintf1>
+ffff000042012c00:       d0000040        adrp    x0, ffff00004201c000 <__func__.0+0x788>
+ffff000042012c04:       9125a000        add     x0, x0, #0x968
+ffff000042012c08:       97fffe1a        bl      ffff000042012470 <cprintf1>
+ffff000042012c0c:       aa1603e0        mov     x0, x22
+ffff000042012c10:       97fffe18        bl      ffff000042012470 <cprintf1>
+ffff000042012c14:       910a4340        add     x0, x26, #0x290
+ffff000042012c18:       97ffff2e        bl      ffff0000420128d0 <release>
+ffff000042012c1c:       aa1303e1        mov     x1, x19
+ffff000042012c20:       aa1403e0        mov     x0, x20
+ffff000042012c24:       97ffe84f        bl      ffff00004200cd60 <strcmp>
+ffff000042012c28:       34000140        cbz     w0, ffff000042012c50 <kernel_process+0x160>
+ffff000042012c2c:       a94153f3        ldp     x19, x20, [sp, #16]
+ffff000042012c30:       a9425bf5        ldp     x21, x22, [sp, #32]
+ffff000042012c34:       a94363f7        ldp     x23, x24, [sp, #48]
+ffff000042012c38:       a9446bf9        ldp     x25, x26, [sp, #64]
+ffff000042012c3c:       a8c57bfd        ldp     x29, x30, [sp], #80
+ffff000042012c40:       d65f03c0        ret
+ffff000042012c44:       aa1303e0        mov     x0, x19
+ffff000042012c48:       97fffe0a        bl      ffff000042012470 <cprintf1>
+ffff000042012c4c:       17ffffbf        b       ffff000042012b48 <kernel_process+0x58>
+ffff000042012c50:       14000000        b       ffff000042012c50 <kernel_process+0x160>
+ffff000042012c54:       910a4340        add     x0, x26, #0x290
+ffff000042012c58:       d0000054        adrp    x20, ffff00004201c000 <__func__.0+0x788>
+ffff000042012c5c:       91220294        add     x20, x20, #0x880
+ffff000042012c60:       97ffff58        bl      ffff0000420129c0 <acquire>
+ffff000042012c64:       aa1303e1        mov     x1, x19
+ffff000042012c68:       aa1403e0        mov     x0, x20
+ffff000042012c6c:       97ffe83d        bl      ffff00004200cd60 <strcmp>
+ffff000042012c70:       340002c0        cbz     w0, ffff000042012cc8 <kernel_process+0x1d8>
+ffff000042012c74:       97ffd621        bl      ffff0000420084f8 <cpuid>
+ffff000042012c78:       2a0003e1        mov     w1, w0
+ffff000042012c7c:       aa1803e2        mov     x2, x24
+ffff000042012c80:       52800743        mov     w3, #0x3a                       // #58
+ffff000042012c84:       aa1703e0        mov     x0, x23
+ffff000042012c88:       97fffdfa        bl      ffff000042012470 <cprintf1>
+ffff000042012c8c:       d0000040        adrp    x0, ffff00004201c000 <__func__.0+0x788>
+ffff000042012c90:       91250000        add     x0, x0, #0x940
+ffff000042012c94:       97fffdf7        bl      ffff000042012470 <cprintf1>
+ffff000042012c98:       aa1603e0        mov     x0, x22
+ffff000042012c9c:       97fffdf5        bl      ffff000042012470 <cprintf1>
+ffff000042012ca0:       910a4340        add     x0, x26, #0x290
+ffff000042012ca4:       97ffff0b        bl      ffff0000420128d0 <release>
+ffff000042012ca8:       aa1303e1        mov     x1, x19
+ffff000042012cac:       aa1403e0        mov     x0, x20
+ffff000042012cb0:       97ffe82c        bl      ffff00004200cd60 <strcmp>
+ffff000042012cb4:       35fffbc0        cbnz    w0, ffff000042012c2c <kernel_process+0x13c>
+ffff000042012cb8:       14000000        b       ffff000042012cb8 <kernel_process+0x1c8>
+ffff000042012cbc:       aa1303e0        mov     x0, x19
+ffff000042012cc0:       97fffdec        bl      ffff000042012470 <cprintf1>
+ffff000042012cc4:       17ffffc9        b       ffff000042012be8 <kernel_process+0xf8>
+ffff000042012cc8:       aa1303e0        mov     x0, x19
+ffff000042012ccc:       97fffde9        bl      ffff000042012470 <cprintf1>
+ffff000042012cd0:       17ffffe9        b       ffff000042012c74 <kernel_process+0x184>
+ffff000042012cd4:       d503201f        nop
+ffff000042012cd8:       d503201f        nop
+ffff000042012cdc:       d503201f        nop
