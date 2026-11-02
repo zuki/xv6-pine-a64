@@ -43,3 +43,7 @@ docs/book
 inc/sunxi/
 *.org
 kern/mmc_save
+
+lock.txt
+tool/dump
+mkfs/mkfs

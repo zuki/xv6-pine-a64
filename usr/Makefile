@@ -28,7 +28,7 @@ all:
 $(OBJ)/%.c.o: %.c $(LIBC_DEPS)
 	mkdir -p $(dir $@)
 	$(USR_CC) $(CFLAGS) -c -o $@ $<
-	
+
 # Same as `bin/NAME: $(OBJ)/NAME/*.c.o $(LIBC_A)`
 # NOTE: Static library should be at last.
 .SECONDEXPANSION:
@@ -36,7 +36,7 @@ $(BIN)/%: $$(addsuffix .o, $$(addprefix $(OBJ)/, $$(shell find $(SRC)/% -name "*
 	mkdir -p $(dir $@)
 	$(USR_CC) $(CFLAGS) -o $@ $^
 	$(OBJDUMP) -S -d $@ > $(OBJ)/src/$(notdir $@)/$(notdir $@).asm
-	$(OBJDUMP) -x $@ > $(OBJ)/src/$(notdir $@)/$(notdir $@).hdr
+	$(READELF) -aW $@ > $(OBJ)/src/$(notdir $@)/$(notdir $@).hdr
 	$(STRIP) --strip-debug $@
 
 clean:

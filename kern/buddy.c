@@ -268,7 +268,7 @@ struct page *buddy_alloc(size_t size) {
 
     /* 1. lockを取得 */
     acquire(&buddy_lock);
-
+    trace("acq budy");
     /* 2. オーダー0からsizeを満たすブロックを探す*/
     for (i = 0; i < PAGE_MAX_DEPTH; ++i) {
         list = &free_lists[i];
@@ -288,6 +288,7 @@ struct page *buddy_alloc(size_t size) {
     }
     /* 3. lockを解放 */
     release(&buddy_lock);
+    trace("rel budy");
 
     /* 4. すべてのオーダーで空きがなかったらpanic */
     if (i == PAGE_MAX_DEPTH) {
@@ -316,6 +317,7 @@ void buddy_free(struct page *page) {
 
     /* 1. lockを取得 */
     acquire(&buddy_lock);
+    trace("acq budy");
     /* 2. ページが所属するフリーリストを取得する */
     list = &free_lists[page->order];
     /* 3. ページの相棒のインデックスを取得する */
@@ -352,8 +354,10 @@ void buddy_free(struct page *page) {
         page->order++;
         /* 6.2.6 まとめられなくなるまで再帰実行 */
         release(&buddy_lock);
+        trace("rel budy");
         return buddy_free(page);
     }
     /* 7. lockを解放 */
     release(&buddy_lock);
+    trace("rel budy");
 }

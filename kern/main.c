@@ -18,6 +18,7 @@
 #include <peripherals/uart.h>
 #include <cache.h>
 #include <sd.h>
+#include <cachepage.h>
 
 int core_flags[NCPU] = { 0 };
 
@@ -103,18 +104,34 @@ void main(void)
     irq_init_gicd();
     irq_init_gicc(0);
     console_init();
+    //unsigned char locked = g_channel.lock.locked;
+    //int intena = intr_get();
+    trace("lock: %s, intena: %d, lock: %x", g_channel.lock.name, intena, locked);
     mm_init();
+    cachepage_init();
     clock_init();
     binit();
+    iinit();
     fileinit();
     proc_init();
     sd_init();
     rtc_init();
     user_init();
-    //start_secondary_cores();
-    timer_init(0);       // ap
+    start_secondary_cores();
+
+    timer_init(0);
     trap_init();
     enable_irq();
+
+    //locked = g_channel.lock.locked;
+    //intena = intr_get();
+    trace("lock: %s, intena: %d, lock: %x", g_channel.lock.name, intena, locked);
+
+    //put32(GICD_ISPENDRn+4, 0x1);
+    //debug("GICD_IGROUPR[1]: 0x%x", get32(GICD_IGROUPRn + 4));
+    //debug("GICD_ISENABLERn[1]: 0x%x", get32(GICD_ISENABLERn + 4));
+    //debug("GICC_CTLR: 0x%x", get32(GICC_CTLR));
+
     scheduler();
 
     while (1) ;
@@ -134,6 +151,7 @@ void secondary_main(int core)
     timer_init(core);
     trap_init();
     enable_irq();
+    trace("GICC_CTLR: 0x%x", get32(GICC_CTLR));
     scheduler();
     while (1)
         ;

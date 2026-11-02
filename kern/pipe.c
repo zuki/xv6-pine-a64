@@ -56,6 +56,7 @@ int pipealloc(struct file **f0, struct file **f1)
 void pipeclose(struct pipe *p, int writable)
 {
     acquire(&p->lock);
+    trace("acq pipe");
     if (writable) {
         p->writeopen = 0;
         wakeup(&p->nread);
@@ -65,9 +66,12 @@ void pipeclose(struct pipe *p, int writable)
     }
     if (p->readopen == 0 && p->writeopen == 0) {
         release(&p->lock);
+        trace("rel pipe");
         kfree((char *)p);
-    } else
+    } else {
         release(&p->lock);
+        trace("rel pipe");
+    }
 }
 
 ssize_t pipewrite(struct pipe *p, char *addr, ssize_t n)
@@ -75,10 +79,12 @@ ssize_t pipewrite(struct pipe *p, char *addr, ssize_t n)
     ssize_t i;
 
     acquire(&p->lock);
+    trace("acq pipe");
     for (i = 0; i < n; i++) {
         while (p->nwrite == p->nread + PIPESIZE) {
             if (p->readopen == 0 || thisproc()->killed) {
                 release(&p->lock);
+                trace("rel pipe");
                 return -1;
             }
             wakeup(&p->nread);
@@ -88,6 +94,7 @@ ssize_t pipewrite(struct pipe *p, char *addr, ssize_t n)
     }
     wakeup(&p->nread);
     release(&p->lock);
+    trace("rel pipe");
     return n;
 }
 
@@ -96,9 +103,11 @@ ssize_t piperead(struct pipe *p, char *addr, ssize_t n)
     ssize_t i;
 
     acquire(&p->lock);
+    trace("acq pipe");
     while (p->nread == p->nwrite && p->writeopen) {
         if (thisproc()->killed) {
             release(&p->lock);
+            trace("rel pipe");
             return -1;
         }
         sleep(&p->nread, &p->lock);
@@ -110,5 +119,6 @@ ssize_t piperead(struct pipe *p, char *addr, ssize_t n)
     }
     wakeup(&p->nwrite);
     release(&p->lock);
+    trace("rel pipe");
     return i;
 }

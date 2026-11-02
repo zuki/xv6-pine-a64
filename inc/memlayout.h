@@ -46,22 +46,29 @@
  */
 
 /* ユーザメモリレイアウト.
- *  USER_TOP    -> ---------------------------   0x0800_0000     (128MB)
+ *  USER_TOP       -> ---------------------------   0x0001_0000_0000_0000
  *                        スタック (1MB)
  *
- *  USER_MAX_STACK -> ---------------------------   0x0500_0000　<- sp
- *                        ガードページ (4KB)
- *                    ---------------------------
+ *  STACK_BASE     -> ---------------------------   0x0000_FFFF_FFFF_0000
+ *
+ *                         mmap領域 (128GB)
+ *  MMAPBASE       -> ---------------------------   0x0000_FFDF_FFFF_0000
+ *
+ *                         libc.so (4GB)
+ *  ELF_ET_DYN_BASE  -> --------------------------- 0x0000_FFDE_FFFF_0000
  *
  *                         ヒープ領域
  *                       ガードページ (4KB)
  *                    ---------------------------
  *                         コード領域
- *  USER_BASE -> ---------------------------    0x0000_0000
+ *                           (_start)               0x0040_0000
+ *  USER_BASE      -> ---------------------------   0x0000_0000
  */
 
 #define USER_BASE       0x0
-#define USER_TOP        0x0001000000000000 // == ユーザスタックのトップ。ユーザ仮想アドレス
+#define USER_TOP        0x0001000000000000      // == ユーザスタックのトップ。ユーザ仮想アドレス
+#define MMAP_BASE       0x0000FFDFFFFF0000      // mmapアドレスの基底アドレス
+#define ELF_ET_DYN_BASE 0x0000FFDEFFFF0000      // dynamic lib を置くアドレス
 
 #define V2P_WO(x) ((x) - KERN_BASE)      /* Same as V2P, but without casts */
 #define P2V_WO(x) ((x) + KERN_BASE)      /* Same as P2V, but without casts */

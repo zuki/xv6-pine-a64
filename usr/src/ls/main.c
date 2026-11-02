@@ -93,7 +93,6 @@ int ls(char *path)
                 perror(path);
                 return(EXIT_FAILURE);
             }
-
             int start = strlen(path) - 1;
             strcpy(filename, path);
             if (filename[start] != '/')

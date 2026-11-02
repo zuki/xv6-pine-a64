@@ -2,16 +2,16 @@
 #define INC_SPINLOCK_H
 
 struct spinlock {
-    volatile int locked;
+    volatile unsigned char locked;
+    //struct cpu *cpu;
     char *name;
 };
-void initlock(struct spinlock *, char *name);
-void acquire(struct spinlock *);
-void release(struct spinlock *);
 
-#ifdef KERNLOCK
-void acquire_kern();
-void release_kern();
-#endif
+void initlock(struct spinlock *lk, char *name);
+void acquire(struct spinlock *lk);
+void release(struct spinlock *lk);
+int  holding(struct spinlock *lk);
+void push_off(void);
+void pop_off(void);
 
 #endif

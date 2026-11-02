@@ -195,12 +195,13 @@ struct slab_cache *slab_cache_create(const char *name, size_t size, uint32_t ali
     /* 2. slab lockをacquire */
     trace("[195] lock slab");
     acquire(&slab_lock);
+    trace("acq slab");
     /* 3. 新規スラブキャッシュを割り当てる */
     cache = slab_cache_new();
     /* 4. slab lock をrelease*/
     trace("[200] release slab");
     release(&slab_lock);
-
+    trace("rel slab");
     /* 5. 名前とオブジェクトサイズを設定する */
     safestrcpy(cache->name, name, strlen(name)+1);
     uint32_t align = alignment ? alignment : 4;         // 最低4バイトアライメント
@@ -238,7 +239,7 @@ void slab_cache_destroy(struct slab_cache *cache) {
     /* 1. lockをかける */
     trace("[237] lock slab");
     acquire(&slab_lock);
-
+    trace("acq slab");
     /* 2. このキャッシュの完全使用済みスラブを解放する */
     header = cache->slabs_full;
     while (header) {
@@ -259,6 +260,7 @@ void slab_cache_destroy(struct slab_cache *cache) {
     /* 4. lockを解除 */
     trace("[258] release slab");
     release(&slab_lock);
+    trace("rel slab");
 }
 
 /**
@@ -277,7 +279,7 @@ void *slab_cache_alloc(struct slab_cache *cache) {
     /* 1. lockを取得する */
     trace("[274] lock cache");
     acquire(&cache->lock);
-
+    trace("acq slab");
     /* 2. 一部割り当て済みリストから割り当てる */
     header = cache->slabs_partial;
     /* 3. 一部割り当て済みリストがない場合は割り当てる */
@@ -311,7 +313,7 @@ void *slab_cache_alloc(struct slab_cache *cache) {
     /* 6. lockを開放する */
     trace("[308] release cache");
     release(&cache->lock);
-
+    trace("rel slab");
     /* 7. 割り当てたオブジェクトを返す */
     trace("START: 0x%llx, head->object: 0x%llx, size: 0x%x, index: %d", (uint64_t)PAGE_START, (uint64_t)header->object, cache->object_size, index);
     uint64_t obj = (uint64_t)header->object + (uint64_t)(cache->object_size * index);
@@ -344,7 +346,6 @@ void slab_cache_free(struct slab_cache *cache, void *obj) {
     /* 1. lockを取得する */
     trace("[339] lock: cache");
     acquire(&cache->lock);
-
     /* 2. free_listを求める */
     free_list = (void*)(header + 1);
     trace("list: 0x%llx", free_list);
@@ -371,6 +372,7 @@ void slab_cache_free(struct slab_cache *cache, void *obj) {
                 /* lockを開放する */
                 trace("[366] release: slab");
                 release(&cache->lock);
+                trace("rel slab");
                 /* 処理終了 */
                 return;
             }
@@ -385,4 +387,5 @@ void slab_cache_free(struct slab_cache *cache, void *obj) {
     /* 7. lockを開放する */
     trace("[380] release: cache");
     release(&cache->lock);
+    trace("rel slab");
 }

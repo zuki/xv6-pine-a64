@@ -9,6 +9,11 @@
 #include <clock.h>
 #include <timer.h>
 #include <syscall.h>
+#include <linux/mman.h>
+#include <mmap.h>
+#include <vm.h>
+
+static long pf_handler(int ec, int dfs, uint64_t far);
 
 void trap_init(void)
 {
@@ -44,12 +49,14 @@ void trap(struct trapframe *tf)
 
     case EC_SVC64:
         if (iss == 0) {
+            enable_irq();
             tf->x[0] = syscall1(tf);
+            trace("ret: 0x%lx", tf->x[0]);
             //check_pending_signal();
+            disable_irq();
         } else {
             warn("unexpected svc iss 0x%x", iss);
         }
-        debug("triger syscall");
         break;
 
     case EC_IABORT:     // 0x20 = 32: ユーザモードで発生した命令例外
@@ -62,7 +69,7 @@ void trap(struct trapframe *tf)
         // 4-7: translation fault at level 0-3
         // 8-11: access flag fault at level 0-3
         // 12-15: permission fault at level 0-3
-#if 0
+
         if (dfs >= 4 && dfs <= 15) {
             if ((tf->x[0] = pf_handler(ec, dfs, far)) < 0) {
                 thisproc()->killed = 1;
@@ -74,9 +81,8 @@ void trap(struct trapframe *tf)
             info("unknown ec: %d, dfs: %d", ec, dfs);
             trap_error(4);
         }
-#endif
-        debug("triger ec: %d at elr: 0x%llx with far: 0x%llx", ec, elr, far);
-        exit(1);
+        //debug("triger ec: %d at elr: 0x%llx with far: 0x%llx", ec, elr, far);
+        //exit(1);
         break;
     case EC_ALIGNMENT:  // 0x22 = 34
         error("SP alignment fault exception at elr: 0x%llx with far: 0x%llx", elr, far);
@@ -86,8 +92,73 @@ void trap(struct trapframe *tf)
     default:
         debug("unknown trap code: %d at elr: 0x%llx with far: 0x%llx", ec, elr, far);
         //dump_tf(tf);
-        exit(1);
-        //panic("unknown");
+        //exit(1);
+        panic("unknown");
+    }
+}
+
+void trap_error(uint64_t type)
+{
+    //debug_reg();
+    error("irq of type %d unimplemented. \n", type);
+    panic("trap_error");
+}
+
+static long pf_handler(int ec, int dfs, uint64_t far)
+{
+    struct proc *p = thisproc();
+    uint64_t *pte;
+    struct vma *vma;
+    static int count = 0;
+
+    far = ROUNDDOWN(far, PGSIZE);
+
+    if (dfs <= 7) {             // Translation fault
+        // 現在のところロジック上ありえない。何らかのバグなのでエラーとする
+        set_pgd((uint64_t)p->pgdir);
+        if ((pte = walk(p->pgdir, (void *)far, 1)) == 0) {
+            if (count++ < 2)
+                error("[%d] recoveary failed: ec=0x%x, dfs=%d, far=0x%llx", p->pid, ec, dfs, far);
+            return -1;
+        } else {
+            if (count++ < 4)
+                trace("[%d] return 0: ec=0x%x, dfs=%d, far=0x%llx, pte=0x%llx, *pte=0x%llx", p->pid, ec, dfs, far, pte, *pte);
+            return 0;
+        }
+    } else if (dfs <= 11) {     // Access fault: 遅延読み込み
+        vma = p->vmas;
+        while (vma) {
+            if (vma->addr == (void *)far) {
+                if (mmap_load_pages(vma->addr, vma->length, vma->prot, vma->flags, vma->f, vma->offset) < 0) {
+                    error("load_pages failed: ec=0x%x, dfs=%d, far=0x%llx, vma=0x%p", ec, dfs, far, vma->addr);
+                    return -1;
+                }
+                set_pgd((uint64_t)p->pgdir);
+                return 0;
+            }
+            vma = vma->next;
+        }
+        return -1;
+    } else {                    // Permission fault: Copy on Write
+        vma = p->vmas;
+        while (vma) {
+            if ((uint64_t)vma->addr <= far
+             && far < (uint64_t)vma->addr + vma->length
+             && vma->flags & MAP_PRIVATE) {
+                if (vma->prot & PROT_WRITE) {
+                    uint64_t perm = get_perm(vma->prot, vma->flags);
+                    perm &= ~PTE_RO;
+                    if (copy_vma_pages(vma->addr, vma->length, perm) < 0) {
+                        error("copy_vma_pages failed: ec=0x%x, dfs=%d, far=0x%llx, vma=0x%p, perm=0x%llx", ec, dfs, far, vma->addr, perm);
+                        return -1;
+                    }
+                    set_pgd((uint64_t)p->pgdir);
+                    return 0;
+                }
+            }
+            vma = vma->next;
+        }
+        return -1;
     }
 }
 

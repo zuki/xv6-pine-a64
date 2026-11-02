@@ -4,6 +4,7 @@
 #include <irq.h>
 #include <arm_timer.h>
 #include <console.h>
+#include <timer.h>
 
 // Timer 0をクロックタイマーとして使用する
 static uint64_t jiffies = 0;
@@ -28,8 +29,8 @@ void clock_intr(void *param)
     //update_proc_time();
 }
 
-
 #if 0
+
 // SoCのtimerモジュールを使う : GICに割り込みが届かなかったので使わない
 void clock_init(void)
 {
@@ -52,7 +53,6 @@ void clock_init(void)
     irq_register(IRQ_TIMER0, clock_intr, 0);
     irq_enable(IRQ_TIMER0);
 
-
     // Timer0は10ms毎に割り込んでtickを進める
     // 1, HSTimerを有効にする
     put32(HS_TMR_IRQ_EN_REG, 0x1);
@@ -69,11 +69,15 @@ void clock_init(void)
     irq_register(IRQ_HSTIMER, clock_intr, 0);
     irq_enable(IRQ_HSTIMER);
 
+}
+
 void clock_reset(void)
 {
     put32(TMR0_CTRL_REG, get32(TMR0_CTRL_REG) | TMR_RELOAD);
     while(get32(TMR0_CTRL_REG) & TMR_RELOAD);
 }
+
+static uint64_t jiffies2 = 0;
 
 /*
  * TODO: tickを進める
@@ -84,10 +88,11 @@ void clock_intr(void *param)
     //put32(TMR_IRQ_STA_REG, 0x1);
     put32(HS_TMR_STAS_REG, 0x1);
     if ((++jiffies2 % 100) == 0)
-        cprintf("#");
+        cprintf("&");
     // 時刻更新処理
     //update_proc_time();
 }
+
 #endif
 
 

@@ -68,14 +68,13 @@
 #define     GICC_BRP_NOPREMPT       (7 << 0)
 
 #define GICC_IAR                (GICC_BASE + 0x00C)     // Interrupt Acknowledge Register
-#define GICC_IAR_INTERRUPT_ID__MASK 0x3FF
-#define GICC_IAR_CPUID__SHIFT       10
-#define GICC_IAR_CPUID__MASK        (3 << 10)
-
 #define GICC_EOIR               (GICC_BASE + 0x010)     // End of Interrupt Register
-#define     GICC_EOIR_EOIINTID__MASK    0x3FF
-#define     GICC_EOIR_CPUID__SHIFT      10
-#define     GICC_EOIR_CPUID__MASK       (3 << 10)
+#define GICC_AIAR               (GICC_BASE + 0x020)     // liased Interrupt Acnowledge Register
+#define GICC_AEOIR              (GICC_BASE + 0x024)
+
+#define     GICC_INTID_MASK             0x3FF
+#define     GICC_CPUID__SHIFT           10
+#define     GICC_CPUID__MASK            (3 << 10)
 
 /* 割り込み番号 */
 #define GIC_IRQ_SGI         0

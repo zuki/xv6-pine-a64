@@ -64,7 +64,7 @@ static struct buf *bget(uint32_t dev, uint32_t bno)
     trace("bno: %d, blockno: 0x%08x", bno, blockno);
 
     acquire(&bcache.lock);
-
+    trace("acq bcache");
     // 指定のブロックバッファがCLINKにあるか?
     // get_block()にあたる.ただし、load_block()はしない
 loop:
@@ -75,6 +75,7 @@ loop:
                 b->flags |= B_BUSY;
                 b->refcnt++;
                 release(&bcache.lock);
+                trace("rel bcache");
                 return b;
             }
             sleep(b, &bcache.lock);
@@ -95,10 +96,11 @@ loop:
                 b->data = (uint8_t *)slab_cache_alloc(BUFDATA);
             trace("recycle: buf: %p, &flags: %p, &dlink: %p, &data: %p", b, &b->flags, &b->dlink, &b->data);
             release(&bcache.lock);
+            trace("rel bcache");
             return b;
         }
     }
-    //debug("bno: %d", bno);
+    //trace("bno: %d", bno);
     for (int i = 0; i < NBUF; i++) {
         int f = bcache.buf[i].flags;
         error("buf[%d]: bn: %d, bvd: %d%d%d", i, bcache.buf[i].blockno, (f % B_BUSY) ? 1 : 0, (f % B_VALID) ? 1 : 0, (f % B_DIRTY) ? 1 : 0 )
@@ -143,12 +145,14 @@ void brelse(struct buf *b)
     }
 
     acquire(&bcache.lock);
+    trace("acq bcache");
     list_drop(&b->clink);
     list_push_back(&bcache.head, &b->clink);
     b->refcnt--;
     b->flags &= ~B_BUSY;
     wakeup(b);
     release(&bcache.lock);
+    trace("rel bcache");
 }
 
 #if 0

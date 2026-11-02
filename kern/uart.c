@@ -27,11 +27,12 @@ void uart_init()
     put32(BUS_CLK_GATING_REG3, get32(BUS_CLK_GATING_REG3) | BUS_CLK_GATING_REG0_UART0_GATING);
     put32(BUS_SOFT_RST_REG4, get32(BUS_SOFT_RST_REG4) | BUS_SOFT_RST0_UART0_RST);
 
+    // PB8: UART0_TX, PB9: UART0_RX;  Expコネクタの7, 8番ピン
     selector = get32(Pn_CFG1(1));
     selector &= ~(7<<4);
-    selector |= 4<<4;
+    selector |= 4<<4;       // PB9: UART0_RX
     selector &= ~(7<<0);
-    selector |= 4<<0;
+    selector |= 4<<0;       // PB8: UART0_TX
     put32(Pn_CFG1(1), selector);
 
     while (get32(UART_USR(0)) & UART_USR_BUSY)
@@ -49,7 +50,6 @@ void uart_init()
     selector |= (UART_LCR_PEN | UART_LCR_STOP | UART_LCR_DLS);  // 8N1
     put32(UART_LCR(0), selector);
 
-    put32(UART_IER(0), UART_ETBEI | UART_ERBFI);
-
-    // FIFOは未設定
+    //put32(UART_FCR(0), UART_FCR_FIFOE);     // FIFOの有効化
+    put32(UART_IER(0), UART_ERBFI);         // Rx割り込みを有効化: Rxに1文字ありで発火
 }

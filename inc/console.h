@@ -8,11 +8,6 @@
 
 #define INPUT_BUF   128
 
-#define LBAFlength "l"
-#define LBAF "%" LBAFlength "x"
-#define LBAFU "%" LBAFlength "u"
-
-
 struct serial_channel {
     char buf[INPUT_BUF];
     size_t r;                   // Read index
@@ -29,6 +24,7 @@ void console_init(void);
 void console_intr(void *_p);
 void cprintf1(const char *fmt, ...);
 void cprintf(const char *fmt, ...);
+//void panic(const char *fmt, ...);
 
 #define assert(x)                                                   \
 ({                                                                  \
@@ -58,8 +54,20 @@ void cprintf(const char *fmt, ...);
         while(1);                               \
 })
 
+
+#if 0
+#define LOG1(_level, ...)                       \
+({                                              \
+    acquire(&g_channel.lock);                   \
+    cprintf1("[%d]%s#%d: ", cpuid(), __func__, __LINE__);    \
+    cprintf1(__VA_ARGS__);                      \
+    cprintf1("\n");                             \
+    release(&g_channel.lock);                   \
+})
+#endif
+
 #ifdef LOG_ERROR
-#define panic(...)  LOG1("PANIC", __VA_ARGS__);
+//#define panic(...)  LOG1("PANIC", __VA_ARGS__);
 #define error(...)  LOG1("ERROR", __VA_ARGS__);
 #define warn(...)
 #define info(...)

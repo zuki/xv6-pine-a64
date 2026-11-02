@@ -6,6 +6,7 @@
 #include <trap.h>
 #include <console.h>
 #include <proc.h>
+#include <linux/errno.h>
 
 typedef long (*func)();
 
@@ -121,15 +122,6 @@ long sys_gettid() {
     return thisproc()->pid;
 }
 
-
-// FIXME: Hack TIOCGWINSZ(get window size)
-long sys_ioctl() {
-    trace("ioctl: name '%s'", thisproc()->name);
-    if (thisproc()->tf->x[1] != 0x5413)
-        panic("ioctl unimplemented. ");
-    return 0;
-}
-
 // FIXME: always return 0 since we don't have signals  :)
 long sys_rt_sigprocmask() {
     trace("rt_sigprocmask: name '%s' how 0x%x", thisproc()->name,
@@ -154,7 +146,7 @@ static func syscalls[] = {
 //    [SYS_getcwd] = (func)sys_getcwd,            // 17
     [SYS_dup] = sys_dup,                        // 23
 //    [SYS_dup3] = sys_dup3,                      // 24
-//    [SYS_fcntl] = sys_fcntl,                    // 25
+    [SYS_fcntl] = sys_fcntl,                    // 25
     [SYS_ioctl] = sys_ioctl,                    // 29
     [SYS_mknodat] = sys_mknodat,                // 33
     [SYS_mkdirat] = sys_mkdirat,                // 34
@@ -171,8 +163,8 @@ static func syscalls[] = {
     [SYS_openat] = sys_openat,                  // 56
     [SYS_close] = sys_close,                    // 57
     [SYS_pipe2] = sys_pipe2,                    // 59
-//    [SYS_getdents64] = sys_getdents,            // 61
-//    [SYS_lseek] = (func)sys_lseek,              // 62
+    [SYS_getdents64] = sys_getdents64,            // 61
+    [SYS_lseek] = (func)sys_lseek,              // 62
     [SYS_read] = (func)sys_read,                // 63
     [SYS_write] = (func)sys_write,              // 64
 //    [SYS_readv] = (func)sys_readv,              // 65
@@ -225,14 +217,14 @@ static func syscalls[] = {
     [SYS_gettid] = sys_gettid,                  // 178
 //    [SYS_sysinfo] = sys_sysinfo,                // 179
     [SYS_brk] = (func)sys_brk,                  // 214
-//    [SYS_munmap] = sys_munmap,                  // 215
-//    [SYS_mremap] = (func)sys_mremap,            // 216
+    [SYS_munmap] = sys_munmap,                  // 215
+    [SYS_mremap] = (func)sys_mremap,            // 216
     [SYS_clone] = sys_clone,                    // 220
     [SYS_execve] = sys_execve,                  // 221
     [SYS_mmap] = (func)sys_mmap,                // 222
 //    [SYS_fadvise64] = sys_fadvise64,            // 223
-//    [SYS_mprotect] = sys_mprotect,              // 226
-//    [SYS_msync] = sys_msync,                    // 227
+    [SYS_mprotect] = sys_mprotect,              // 226
+    [SYS_msync] = sys_msync,                    // 227
 //    [SYS_madvise] = sys_madvise,                // 233
     [SYS_wait4] = sys_wait4,                    // 260
 //    [SYS_prlimit64] = sys_prlimit64,            // 261
@@ -337,11 +329,12 @@ long syscall1(struct trapframe *tf)
 {
     thisproc()->tf = tf;
     int sysno = tf->x[8];
+    long ret = -EINVAL;
 
     if (sysno > 0 && sysno < ARRAY_SIZE(syscalls) && syscalls[sysno]) {
-        if (sysno != SYS_sched_yield /* && sysno != SYS_rt_sigprocmask */)
-            debug("proc[%d] %s called", thisproc()->pid, syscall_names[sysno]);
-        return syscalls[sysno]();
+        if (sysno != SYS_sched_yield && sysno != SYS_rt_sigprocmask)
+            trace("proc[%d] %s called", thisproc()->pid, syscall_names[sysno]);
+        ret = syscalls[sysno]();
     } else {
         //debug_reg();
         if (syscall_names[sysno]) {
@@ -350,4 +343,5 @@ long syscall1(struct trapframe *tf)
             panic("Unexpected syscall #%d (unknown)\n", sysno);
         }
     }
+    return ret;
 }

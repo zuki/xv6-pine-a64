@@ -41,7 +41,7 @@ int execve(const char *path, char *const argv[], char *const envp[])
     ilock(ip);
 
     Elf64_Ehdr elf;
-    if (readi(ip, (char *)&elf, 0, sizeof(elf)) != sizeof(elf)) {
+    if (readi(ip, 0, (char *)&elf, 0, sizeof(elf)) != sizeof(elf)) {
         debug("readelf bad");
         goto bad;
     }
@@ -68,7 +68,7 @@ int execve(const char *path, char *const argv[], char *const envp[])
     size_t sz = 0, base = 0, stksz = 0;
     int first = 1;
     for (i = 0, off = elf.e_phoff; i < elf.e_phnum; i++, off += sizeof(ph)) {
-        if (readi(ip, (char *)&ph, off, sizeof(ph)) != sizeof(ph)) {
+        if (readi(ip, 0, (char *)&ph, off, sizeof(ph)) != sizeof(ph)) {
             debug("readi bad");
             goto bad;
         }
@@ -106,7 +106,7 @@ int execve(const char *path, char *const argv[], char *const envp[])
 
         uvm_switch(pgdir);
 
-        if (readi(ip, (char *)ph.p_vaddr, ph.p_offset, ph.p_filesz) !=
+        if (readi(ip, 0, (char *)ph.p_vaddr, ph.p_offset, ph.p_filesz) !=
             ph.p_filesz) {
             debug("read section bad");
             goto bad;

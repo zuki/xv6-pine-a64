@@ -40,6 +40,7 @@ void sd_init(void)
     initlock(&sdlock, "sd");
 
     acquire(&sdlock);
+    trace("acq sd");
     int ret = mmc_initialize(&sd0);
     //assert(ret == 0);
     if (ret)
@@ -52,7 +53,7 @@ void sd_init(void)
     }
 
     release(&sdlock);
-
+    trace("rel sd");
     //assert(mbr.signature == 0xAA55);
 
     memmove(&mbr, buf, 512);
@@ -82,8 +83,10 @@ bool check_block_range(lbaint_t start, lbaint_t blkcnt)
 void sd_intr(void)
 {
     acquire(&sdlock);
+    trace("acq sd");
     wakeup(&sd0);
     release(&sdlock);
+    trace("rel sd");
 }
 
 
@@ -119,6 +122,7 @@ static void sd_start(void)
 void sd_rw(struct buf *b)
 {
     acquire(&sdlock);
+    trace("acq sd");
     trace("bno: 0x%x, flags: %d", b->blockno, b->flags);
 
     // Append to request queue.
@@ -133,11 +137,14 @@ void sd_rw(struct buf *b)
         sd_sleep(b);
 
     release(&sdlock);
+    trace("rel sd");
 }
 
 void sd_flush(void)
 {
     acquire(&sdlock);
+    trace("acq sd");
     sd_start();
     release(&sdlock);
+    trace("rel sd");
 }

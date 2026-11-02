@@ -2,7 +2,7 @@
  * Context switch
  *
  *   void swtch(struct context **old, struct context *new);
- * 
+ *
  * Save the current registers on the stack, creating
  * a struct context, and save its address in *old.
  * Switch stacks to new and pop previously-saved registers.
@@ -11,7 +11,7 @@
 swtch:
     dsb     sy; isb
     /* Save old callee-saved registers. */
-    # str     q0, [sp, #-16]!
+    str     q0, [sp, #-16]!
 
     stp     x19, xzr, [sp, #-16]!
     stp     x21, x20, [sp, #-16]!
@@ -35,7 +35,7 @@ swtch:
     ldp     x21, x20, [sp], #16
     ldp     x19, xzr, [sp], #16
 
-    # ldr     q0, [sp], #16
+    ldr     q0, [sp], #16
 
     /* Why not simply ret by x30? This is a hack for forkret. */
     dsb     sy; isb

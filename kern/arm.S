@@ -134,6 +134,24 @@ enable_irq:
   msr   daifclr, #2
   ret
 
+// void wfi(void);
+.globl wfi
+wfi:
+  wfi
+  ret
+
+// void wfe(void);
+.globl wfe
+wfe:
+  wfe
+  ret
+
+// void sev(void);
+.globl sev
+sev:
+  sev
+  ret
+
 // 割り込みを無効にする: void diable_irq(void);
 .globl disable_irq
 disable_irq:

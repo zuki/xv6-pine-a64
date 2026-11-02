@@ -10,7 +10,8 @@
 #include <cache.h>
 #include <sd.h>
 #include <file.h>
-
+#include <mmap.h>
+#include <slab.h>
 
 extern void trapret();
 extern void swtch(struct context **old, struct context *new);
@@ -34,12 +35,15 @@ struct {
 
 struct proc *initproc;
 static int pid = 0;
+struct slab_cache *VMA;
 
 void proc_init()
 {
     list_init(&ptable.sched_que);
     for (int i = 0; i < SQSIZE; i++)
         list_init(&ptable.slpque[i]);
+
+    VMA = slab_cache_create("vma", sizeof(struct vma), 0);
 }
 
 // TODO: use kmalloc
@@ -56,6 +60,7 @@ proc_alloc()
     int found = 0;
 
     acquire(&ptable.lock);
+    trace("acq ptable");
     for (p = ptable.proc; p < ptable.proc + NPROC; p++) {
         if (p->state == UNUSED) {
             memset(p, 0, sizeof(*p));
@@ -66,12 +71,14 @@ proc_alloc()
 
     if (!found || !(p->kstack = kalloc(1))) {
         release(&ptable.lock);
+        trace("rel ptable");
         return 0;
     }
 
     p->pid = ++pid;
     p->state = EMBRYO;
     release(&ptable.lock);
+    trace("rel ptable");
 
     p->name[0] = 0;
 
@@ -115,6 +122,7 @@ proc_initx(char *name, char *code, size_t len)
     p->stksz = 0;
     p->sz = PGSIZE;
     p->base = 0;
+    p->vmas = NULL;
 
     p->tf->elr = 0;
 
@@ -140,8 +148,10 @@ user_init()
     assert(p->cwd);
 
     acquire(&ptable.lock);
+    trace("acq ptable");
     list_push_back(&ptable.sched_que, &p->link);
     release(&ptable.lock);
+    trace("rel ptable");
 }
 
 /*
@@ -159,6 +169,7 @@ scheduler()
     idle_init();
     for (struct proc * p;;) {
         acquire(&ptable.lock);
+        trace("acq ptable");
         struct list_head *head = &ptable.sched_que;
         if (list_empty(head)) {
             p = thiscpu()->idle;
@@ -170,6 +181,7 @@ scheduler()
         thiscpu()->proc = p;
         swtch(&thiscpu()->scheduler, p->context);
         release(&ptable.lock);
+        trace("rel ptable");
     }
 }
 
@@ -184,9 +196,11 @@ forkret()
     if (first && thisproc() != thiscpu()->idle) {
         first = 0;
         release(&ptable.lock);
-        iinit(ROOTDEV);
+        trace("rel ptable");
+        fsinit(ROOTDEV);
     } else {
         release(&ptable.lock);
+        trace("rel ptable");
     }
     trace("proc '%s'(%d)", thisproc()->name, thisproc()->pid);
 }
@@ -197,12 +211,14 @@ yield()
 {
     struct proc *p = thisproc();
     acquire(&ptable.lock);
+    trace("acq ptable");
     if (p != thiscpu()->idle)
         list_push_back(&ptable.sched_que, &p->link);
     p->state = RUNNABLE;
     swtch(&p->context, thiscpu()->scheduler);
     p->state = RUNNING;
     release(&ptable.lock);
+    trace("rel ptable");
 }
 
 /*
@@ -219,7 +235,9 @@ sleep(void *chan, struct spinlock *lk)
 
     if (lk != &ptable.lock) {
         acquire(&ptable.lock);
+        trace("acq ptable");
         release(lk);
+        trace("rel %s", lk->name);
     }
 
     p->chan = chan;
@@ -233,7 +251,9 @@ sleep(void *chan, struct spinlock *lk)
 
     if (lk != &ptable.lock) {
         release(&ptable.lock);
+        trace("rel ptable");
         acquire(lk);
+        trace("acq %s", lk->name);
     }
 }
 
@@ -262,8 +282,10 @@ void
 wakeup(void *chan)
 {
     acquire(&ptable.lock);
+    trace("acq ptable");
     wakeup1(chan);
     release(&ptable.lock);
+    trace("rel ptable");
 }
 
 /*
@@ -271,25 +293,41 @@ wakeup(void *chan)
  * Sets up stack to return as if from system call.
  * Caller must set state of returned proc to RUNNABLE.
  */
-int
-fork()
+int fork()
 {
+    int ret = 0;
+
     struct proc *cp = thisproc();
     struct proc *np = proc_alloc();
 
     if (np == 0) {
-        debug("proc_alloc returns null");
+        error("proc_alloc returns null");
         return -1;
+    }
+
+    // 親プロセスから子プロセスにvmasをコピーする
+    trace("call copy_vmas: p: %d, np: %d", cp->pid, np->pid);
+    if ((ret = copy_vmas(cp, np)) < 0) {
+        //trace("ret=%d", ret);
+        acquire(&ptable.lock);
+        np->state = UNUSED;
+        release(&ptable.lock);
+        error("failed copy_vmas");
+        return ret;
+    } else {
+        //print_mmap_list(cp, "fork cp");
+        //print_mmap_list(np, "fork np");
     }
 
     if ((np->pgdir = uvm_copy(cp->pgdir)) == 0) {
         kfree(np->kstack);
 
         acquire(&ptable.lock);
+        trace("acq ptable");
         np->state = UNUSED;
         release(&ptable.lock);
-
-        debug("uvm_copy returns null");
+        trace("rel ptable");
+        error("uvm_copy returns null");
         return -1;
     }
 
@@ -312,10 +350,12 @@ fork()
     int pid = np->pid;
 
     acquire(&ptable.lock);
+    trace("acq ptable");
     list_push_back(&cp->child, &np->clink);
     list_push_back(&ptable.sched_que, &np->link);
     np->state = RUNNABLE;
     release(&ptable.lock);
+    trace("rel ptable");
 
     trace("'%s'(%d) fork '%s'(%d)", cp->name, cp->pid, np->name, np->pid);
 
@@ -336,6 +376,7 @@ wait()
     struct proc *p, *np;
 
     acquire(&ptable.lock);
+    trace("acq ptable");
     while (!list_empty(q)) {
         list_foreach_safe(p, np, q, clink) {
             if (p->state == ZOMBIE) {
@@ -349,12 +390,14 @@ wait()
 
                 int pid = p->pid;
                 release(&ptable.lock);
+                trace("rel ptable");
                 return pid;
             }
         }
         sleep(cp, &ptable.lock);
     }
     release(&ptable.lock);
+    trace("rel ptable");
     return -1;
 }
 
@@ -374,6 +417,20 @@ exit(int err)
         warn("exit: pid %d, err %d", cp->pid, err);
     }
 
+    // vmaを解除する
+    //print_mmap_list(p, "before exit");
+    if (cp->vmas) {
+        struct vma *vma = cp->vmas;
+        while (vma) {
+            if (vma->f)
+                trace("pid[%d] f->ip: %d refcnt[1]: %d", cp->pid, vma->f->ip->inum, vma->f->ip->ref);
+            munmap(vma->addr, vma->length);
+            vma = vma->next;
+        }
+        cp->vmas = NULL;
+    }
+    //print_mmap_list(p, "after  exit");
+
     // Close all open files.
     for (int fd = 0; fd < NOFILE; fd++) {
         if (cp->ofile[fd]) {
@@ -386,6 +443,7 @@ exit(int err)
     cp->cwd = 0;
 
     acquire(&ptable.lock);
+    trace("acq ptable");
 
     // Parent might be sleeping in wait().
     wakeup1(cp->parent);
@@ -415,26 +473,26 @@ exit(int err)
  * Print a process listing to console. For debugging.
  * Runs when user types ^P on console.
  */
-void
-procdump()
+void procdump()
 {
     static char *states[] = {
-        [UNUSED] "unused",
-        [EMBRYO] "embryo",
-        [SLEEPING] "sleep ",
-        [RUNNABLE] "runble",
-        [RUNNING] "run   ",
-        [ZOMBIE] "zombie"
+        [UNUSED]   "unused  ",
+        [EMBRYO]   "embryo  ",
+        [SLEEPING] "sleeping",
+        [RUNNABLE] "runnable",
+        [RUNNING]  "running ",
+        [ZOMBIE]   "zombie  "
     };
     struct proc *p;
 
     // Donot acquire ptable.lock to avoid deadlock
     // acquire(&ptable.lock);
+    cprintf("\n");
     for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
         if (p->state == UNUSED)
             continue;
         if (p->parent)
-            cprintf("%d %s %s fa: %d\n", p->pid, states[p->state], p->name,
+            cprintf("%d %s %s ppid: %d\n", p->pid, states[p->state], p->name,
                     p->parent->pid);
         else
             cprintf("%d %s %s\n", p->pid, states[p->state], p->name);

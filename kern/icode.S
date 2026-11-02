@@ -17,7 +17,7 @@ ispin:
     b       ispin
 
 init:
-    .string "/init\0"
+    .string "/bin/init\0"
 
 .align 4
 eicode:

@@ -10,23 +10,23 @@
 #define O_WRONLY  01
 #define O_RDWR    02
 
-#define O_CREAT        0100     // 0x40
-#define O_EXCL         0200     // 0x80
-#define O_NOCTTY       0400     // 0x100
-#define O_TRUNC       01000     // 0x200
-#define O_APPEND      02000     // 0x400
-#define O_NONBLOCK    04000     // 0x800
-#define O_DSYNC      010000     // 0x1000
+#define O_CREAT        0100     //     0x40
+#define O_EXCL         0200     //     0x80
+#define O_NOCTTY       0400     //    0x100
+#define O_TRUNC       01000     //    0x200
+#define O_APPEND      02000     //    0x400
+#define O_NONBLOCK    04000     //    0x800
+#define O_DSYNC      010000     //   0x1000
 #define O_SYNC     04010000     // 0x101000
 #define O_RSYNC    04010000     // 0x101000
-#define O_DIRECTORY  040000     // 0x4000
-#define O_NOFOLLOW  0100000     // 0x8000
-#define O_CLOEXEC  02000000     // 0x80000
+#define O_DIRECTORY  040000     //   0x4000
+#define O_NOFOLLOW  0100000     //   0x8000
+#define O_CLOEXEC  02000000     //  0x80000
 
-#define O_ASYNC      020000     // 0x2000
-#define O_DIRECT    0200000     // 0x10000
-#define O_LARGEFILE 0400000     // 0x20000
-#define O_NOATIME  01000000     // 0x40000
+#define O_ASYNC      020000     //   0x2000
+#define O_DIRECT    0200000     //  0x10000
+#define O_LARGEFILE 0400000     //  0x20000
+#define O_NOATIME  01000000     //  0x40000
 #define O_PATH    010000000     // 0x200000
 #define O_TMPFILE 020040000     // 0x404000
 #define O_NDELAY O_NONBLOCK

@@ -289,7 +289,7 @@ static int mmc_rint_wait(struct sunxi_mmc_priv *priv, struct mmc *mmc,
         status = get32((uint64_t)&priv->reg->rint);
         if ((get_timer(start) > timeout_msecs) ||
             (status & SUNXI_MMC_RINT_INTERRUPT_ERROR_BIT)) {
-            debug("%s timeout %x", what,
+            trace("%s timeout %x", what,
                   status & SUNXI_MMC_RINT_INTERRUPT_ERROR_BIT);
             return -ETIMEDOUT;
         }
@@ -372,7 +372,7 @@ static int sunxi_mmc_send_cmd_common(struct sunxi_mmc_priv *priv,
         goto out;
 
     if (data) {
-        timeout_msecs = 120;
+        timeout_msecs = 1000; //120;
         trace("calc timeout %x msec", timeout_msecs);
         error = mmc_rint_wait(priv, mmc, timeout_msecs,
                       data->blocks > 1 ?

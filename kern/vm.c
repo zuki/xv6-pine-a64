@@ -25,7 +25,7 @@ uint64_t *vm_init(void)
  * 仮想アドレスvapに対応するユーザページテーブルのpteのアドレスを返す。
  * if alloc != 0 の場合、必要なページテーブルページを作成する。
  */
-static uint64_t *walk(uint64_t * pgdir, void *vap, int alloc)
+uint64_t *walk(uint64_t * pgdir, void *vap, int alloc)
 {
     uint64_t *pgt = pgdir, va = (uint64_t) vap;
     for (int i = 0; i < 3; i++) {
@@ -185,6 +185,43 @@ int uvm_map(uint64_t * pgdir, void *va, size_t sz, uint64_t pa)
 }
 
 /*
+ * vaから始まるマッピングをnpagesページ削除する。vaはページアライン
+ * されていなければならない。マッピングは存在しなければならない。
+ * オプションで物理メモリを解放する。
+ */
+void uvm_unmap(uint64_t *pgdir, uint64_t va, uint64_t npages, int do_free)
+{
+    uint64_t a;
+    uint64_t *pte;
+
+    trace("papetable: 0x%llx, va: 0x%llx, np: %lld, free: %d", pgdir, va, npages, do_free);
+
+    if ((va % PGSIZE) != 0)
+        panic("uvm_unmap: not aligned");
+
+    for (a = va; a < va + npages*PGSIZE; a += PGSIZE) {
+        if ((pte = walk(pgdir, (void *)a, 0)) == 0) {
+            trace("no pte for va: 0x%lx", a);
+            continue;
+        }
+
+        // uvm_copyと同じ理由
+        if ((pte && *pte & PTE_VALID) == 0) {
+            trace("[%d] pte: %p, *pte: 0x%lx", a, pte, *pte);
+            continue;
+        }
+        if ((PTE_FLAGS(*pte) & 0x3ff) == PTE_VALID)
+            panic("uvm_unmap: not a leaf");
+        if (do_free) {
+            uint64_t pa = PTE_ADDR(*pte);
+            kfree(P2V(pa));
+        }
+        *pte = 0;
+    }
+}
+
+
+/*
  * Allocate page tables and physical memory to grow process
  * from oldsz to newsz, which need not be page aligned.
  * Stack size stksz should be page aligned.
@@ -262,18 +299,25 @@ int copyout(uint64_t * pgdir, void *dstva, void *src, size_t len)
     size_t n, pgoff;
     uint64_t *pte;
 
-    if ((size_t)dstva + len > USER_TOP)
+    if ((size_t)dstva + len > USER_TOP) {
+        error("dstva + len over USER_TOP: dstva: 0x%lx, len: 0x%lx", (size_t)dstva , len);
         return -1;
+    }
+
 
     for (; len; len -= n, dstva += n) {
         pgoff = dstva - ROUNDDOWN(dstva, PGSIZE);
-        if ((pte = walk(pgdir, dstva, 1)) == 0)
+        if ((pte = walk(pgdir, dstva, 1)) == 0) {
+            error("walk failed, ")
             return -1;
+        }
         if (*pte & PTE_VALID) {
             page = P2V(PTE_ADDR(*pte));
         } else {
-            if ((page = kalloc(1)) == 0)
+            if ((page = kalloc(1)) == 0) {
+                error("could alloc for page");
                 return -1;
+            }
             *pte = V2P(page) | PTE_UDATA;
         }
         n = MIN(PGSIZE - pgoff, len);

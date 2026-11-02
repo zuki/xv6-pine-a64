@@ -1,9 +1,13 @@
 #include <types.h>
+#include <param.h>
 #include <arm.h>
 #include <console.h>
+#include <file.h>
 #include <irq.h>
 #include <spinlock.h>
 #include <uart.h>
+#include <vm.h>
+#include <proc.h>
 
 struct serial_channel g_channel;
 static int panicked = -1;
@@ -24,19 +28,19 @@ static void consputc(int c)
 
 static void console_intr1(char (*getc)())
 {
-    int c; /*, prof = 0; */
+    int c, prof = 0;
 
-    acquire(&g_channel.lock);
+    //acquire(&g_channel.lock);
     if (panicked >= 0) {
-        release(&g_channel.lock);
+        //release(&g_channel.lock);
         while (1) ;
     }
 
     while ((c = getc()) >= 0) {
         switch (c) {
-        //case C('P'):           // Process listing.
-        //    prof = 1;
-        //    break;
+        case C('P'):           // Process listing.
+            prof = 1;
+            break;
         case C('U'):           // Kill line.
             while (g_channel.e != g_channel.w
                    && g_channel.buf[(g_channel.e - 1) % INPUT_BUF] != '\n') {
@@ -52,27 +56,75 @@ static void console_intr1(char (*getc)())
             }
             break;
         default:
-            if (c != 0 && g_channel.e - g_channel.r < INPUT_BUF) {
+            if (c != 0 && (g_channel.e - g_channel.r) < INPUT_BUF) {
                 c = (c == '\r') ? '\n' : c;
                 g_channel.buf[g_channel.e++ % INPUT_BUF] = c;
                 consputc(c);
                 if (c == '\n' || c == C('D')
-                    || g_channel.e == g_channel.r + INPUT_BUF) {
+                    || (g_channel.e - g_channel.r) == INPUT_BUF) {
                     g_channel.w = g_channel.e;
-                    //wakeup(&g_channel.r);
+                    wakeup(&g_channel.r);
                 }
             }
             break;
         }
     }
-    release(&g_channel.lock);
+    //release(&g_channel.lock);
 
-#if 0
     if (prof) {
         //mm_dump();
         procdump();
     }
-#endif
+}
+
+static ssize_t consolewrite(int user_src, uint64_t src, int off, int n)
+{
+    for (int i = 0; i < n; i++) {
+        char c;
+        if (either_copyin(&c, user_src, src + i, 1) < 0)
+            break;
+        if (c == '\1')
+            c = 0x20;
+        uart_putchar(c);
+    }
+    return n;
+}
+
+static ssize_t consoleread(int user_dst, uint64_t dst, int off, int n)
+{
+    uint32_t bufsize = n;
+
+    trace("user_dst: %d, dst: 0x%lx, off: %ld, n: %d",
+        user_dst, dst, off, n);
+
+    acquire(&g_channel.lock);
+    while (n > 0) {
+        while (g_channel.r == g_channel.w) {
+            if (thisproc()->killed) {
+                release(&g_channel.lock);
+                return -1;
+            }
+            sleep(&g_channel.r, &g_channel.lock);
+        }
+        int c = g_channel.buf[g_channel.r++ % INPUT_BUF];
+        if (c == C('D')) {
+            if (n < bufsize)
+                g_channel.r--;
+            break;
+        }
+        char cbuf = (c & 0xff);
+        if (either_copyout(user_dst, dst, &cbuf, 1) < 0)
+            break;
+
+        ++dst;
+        --n;
+
+        if (c == '\n')
+            break;
+    }
+    release(&g_channel.lock);
+    trace("return %d", bufsize - n);
+    return bufsize - n;
 }
 
 void console_intr(void *_p)
@@ -85,9 +137,16 @@ void console_init(void)
     initlock(&g_channel.lock, "console");
     uart_init();
 
+    devsw[TTYMAJOR].read = consoleread;
+    devsw[TTYMAJOR].write = consolewrite;
+    //devsw[TTYMAJOR].ioctl = consolectl;
+
     irq_register(IRQ_UART0, console_intr, 0);
     irq_enable(IRQ_UART0);
-    //info("console_init ok");
+
+    //debug("GICD_ITARGETSR[1]: 0x%x", get32(GICD_ITARGETSRn+32));
+
+    info("console_init ok");
 }
 
 static void printint(int64_t x, int base, int sign, int zero, int col)
@@ -148,15 +207,15 @@ void vprintfmt(void (*putch)(int), const char *fmt, va_list ap)
 
         switch (c) {
         case 'u':
-            if (l == 2) printint(va_arg(ap, int64_t), 10, 0, z, n);
+            if (l > 0) printint(va_arg(ap, int64_t), 10, 0, z, n);
             else printint(va_arg(ap, uint32_t), 10, 0, z, n);
             break;
         case 'd':
-            if (l == 2) printint(va_arg(ap, int64_t), 10, 1, z, n);
+            if (l > 0) printint(va_arg(ap, int64_t), 10, 1, z, n);
             else printint(va_arg(ap, int), 10, 1, z, n);
             break;
         case 'x':
-            if (l == 2) printint(va_arg(ap, int64_t), 16, 0, z, n);
+            if (l > 0) printint(va_arg(ap, int64_t), 16, 0, z, n);
             else printint(va_arg(ap, uint32_t), 16, 0, z, n);
             break;
         case 'p':
@@ -202,10 +261,12 @@ void cprintf(const char *fmt, ...)
     va_list ap;
 
     acquire(&g_channel.lock);
+    trace("acq g_chan");
     va_start(ap, fmt);
     vprintfmt(uart_putchar, fmt, ap);
     va_end(ap);
     release(&g_channel.lock);
+    trace("rel g_chan");
 }
 
 void cprintf1(const char *fmt, ...)
@@ -215,3 +276,26 @@ void cprintf1(const char *fmt, ...)
     vprintfmt(uart_putchar, fmt, ap);
     va_end(ap);
 }
+
+#if 0
+void panic(const char *fmt, ...)
+{
+    va_list ap;
+
+    acquire(&g_channel.lock);
+    if (panicked < 0)
+        panicked = cpuid();
+    else {
+        release(&g_channel.lock);
+        while (1) ;
+    }
+    va_start(ap, fmt);
+    vprintfmt(uart_putchar, fmt, ap);
+    va_end(ap);
+    release(&g_channel.lock);
+
+    cprintf("%s:%d: kernel panic at cpu %d.\n", __FILE__, __LINE__,
+            cpuid());
+    while (1) ;
+}
+#endif
