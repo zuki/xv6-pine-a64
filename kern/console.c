@@ -141,6 +141,7 @@ void console_init(void)
     devsw[TTYMAJOR].write = consolewrite;
     //devsw[TTYMAJOR].ioctl = consolectl;
 
+    set_gicd_itarget(IRQ_UART0, 0x0f);          // すべてのcpuに送信
     irq_register(IRQ_UART0, console_intr, 0);
     irq_enable(IRQ_UART0);
 

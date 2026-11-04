@@ -71,9 +71,9 @@ void irq_init_gicd(void)
         put32(GICD_ICFGRn + 4 * i, 0x55555555);
     }
 
+    // GICD_ITARGETSR 0-7はRead Only
     for (uint32_t i = 0; i < 8 ; i++) {
-        put32(GICD_IPRIORITYRn + 4 * i, 0x80808080);    /* SGIとPPIの優先度 */
-        put32(GICD_ITARGETSRn + 4 * i, 0x0f0f0f0f);
+        put32(GICD_IPRIORITYRn + 4 * i, 0x80808080);    // SGIとPPIの優先度
     }
 
     // SPIの設定
@@ -94,11 +94,11 @@ void irq_init_gicd(void)
     }
 
     // 1レジスタ 4 irq -> 56 レジスタ
-    // すべてのSPI割り込みをデフォルト優先度 (0xf0) で、すべての割り込みをすべてのコアに配信
+    // すべてのSPI割り込みをデフォルト優先度 (0xa0) で、すべてのSPI割り込みはコアに配信しない（登録時に個別に設定）
     //    1割り込み8bit、優先度は値が小さいほど優先度が高い
     for (idx = (GIC_IRQ_SPI / 4); idx < (nlines / 4); idx++) {
         put32(GICD_IPRIORITYRn + 4 * idx, 0xa0a0a0a0);  /* SPI priority */
-        put32(GICD_ITARGETSRn + 4 * idx, 0x0f0f0f0f);   /* SPI on CPU0 */
+        put32(GICD_ITARGETSRn + 4 * idx, 0x00000000);   /* SPI to no cpu */
     }
 
 #if 0
@@ -136,7 +136,7 @@ void irq_init_gicc(int core)
     iccicr |= (GICC_CTLR_IRQBYPDISGRP1 | GICC_CTLR_FIRQBYPDISGRP1 | GICC_CTLR_ENABLE);
     put32(GICC_CTLR, iccicr);
 
-    //info("cpu%d_init ok", cpuid());
+    info("cpu%d_init ok", cpuid());
 }
 
 void irq_enable(int i)
