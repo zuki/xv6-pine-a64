@@ -40,6 +40,11 @@ struct inode {
     device_t devno;             // デバイス番号 : major/minor (T_DEVICE only)
     uint32_t size;              // ファイルサイズ（バイト単位）(bytes)
     mode_t   mode;              // ファイルモード
+
+    struct timespec atime;      // 最新アクセス日時
+    struct timespec mtime;      // 最新更新日時
+    struct timespec ctime;      // 作成日時
+
     uint32_t addrs[NDIRECT+2];
 };
 

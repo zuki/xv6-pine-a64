@@ -623,3 +623,24 @@ $ /bin/echo agc
 agc
 $
 ```
+
+## 計時機能、RTCを作成してstruct inodeにamc-timeをもたせる
+
+```bash
+$ /bin/ls /
+drwxrwxr-x    1 anon anon  2026-11-05 01:58:25   4096 .
+drwxrwxr-x    1 anon anon  2026-11-05 01:58:25   4096 ..
+drwxrwxr-x    2 anon anon  2026-11-05 01:58:25    448 bin
+drwxrwxr-x    3 anon anon  2026-11-05 01:58:25    192 dev
+drwxr-xr-x    4 anon anon  2026-11-05 01:58:25    128 proc
+drwxrwxrwx    5 anon anon  2026-11-05 01:58:25    128 lib
+-rwxr-xr-x    7 anon anon  2026-11-05 01:58:25     43 test.txt
+$ /bin/ls /bin
+drwxrwxr-x    2 anon anon  2026-11-05 01:58:25    448 .
+drwxrwxr-x    1 anon anon  2026-11-05 01:58:25   4096 ..
+-rwxr-xr-x    8 anon anon  2026-11-05 01:58:25  41816 cat
+-rwxr-xr-x    9 anon anon  2026-11-05 01:58:25  22312 init
+-rwxr-xr-x   10 anon anon  2026-11-05 01:58:25  42720 echo
+-rwxr-xr-x   11 anon anon  2026-11-05 01:58:25  57448 sh
+-rwxr-xr-x   12 anon anon  2026-11-05 01:58:25  71512 ls
+```

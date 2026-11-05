@@ -39,7 +39,6 @@ int execve(const char *path, char *const argv[], char *const envp[])
         goto bad;
     }
     ilock(ip);
-
     Elf64_Ehdr elf;
     if (readi(ip, 0, (char *)&elf, 0, sizeof(elf)) != sizeof(elf)) {
         debug("readelf bad");
@@ -111,12 +110,13 @@ int execve(const char *path, char *const argv[], char *const envp[])
             debug("read section bad");
             goto bad;
         }
+
         // Initialize BSS.
         memset((void *)ph.p_vaddr + ph.p_filesz, 0,
                ph.p_memsz - ph.p_filesz);
 
         // Flush dcache to memory so that icache can retrieve the correct one.
-        __asm_flush_dcache_range((void *)ph.p_vaddr, (void *)ph.p_vaddr+ph.p_memsz)
+        __asm_flush_dcache_range((void *)ph.p_vaddr, (void *)ph.p_vaddr+ph.p_memsz);
 
         trace("init bss [0x%p, 0x%p)", ph.p_vaddr + ph.p_filesz,
               ph.p_vaddr + ph.p_memsz);

@@ -156,9 +156,9 @@ void dump(FILE *f, char type, int arg1, int arg2) {
             printf("  mode: 0x%04x\n", inode->mode);
             printf("   uid: %d\n", inode->uid);
             printf("   gid: %d\n", inode->gid);
-            printf(" atime: 0x%08lx\n", inode->atime.tv_sec);
-            printf(" mtime: 0x%08lx\n", inode->mtime.tv_sec);
-            printf(" ctime: 0x%08lx\n", inode->ctime.tv_sec);
+            printf(" atime: %ld\n", inode->atime.tv_sec);
+            printf(" mtime: %ld\n", inode->mtime.tv_sec);
+            printf(" ctime: %ld\n", inode->ctime.tv_sec);
             for (j = 0; j < NDIRECT+2; j++) {
                 if (inode->addrs[j] == 0) break;
                 printf(" addrs[%02d]: %d\n", j, inode->addrs[j]);

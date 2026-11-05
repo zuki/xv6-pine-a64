@@ -109,13 +109,13 @@ void main(void)
     trace("lock: %s, intena: %d, lock: %x", g_channel.lock.name, intena, locked);
     mm_init();
     cachepage_init();
+    rtc_init();
     clock_init();
     binit();
     iinit();
     fileinit();
     proc_init();
     sd_init();
-    rtc_init();
     user_init();
     start_secondary_cores();
 

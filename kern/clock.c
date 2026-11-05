@@ -1,13 +1,48 @@
+#include <types.h>
 #include <clock.h>
-
-#include <arm.h>
 #include <irq.h>
-#include <arm_timer.h>
+#include <rtc.h>
 #include <console.h>
-#include <timer.h>
+#include <vm.h>
+#include <linux/errno.h>
+#include <linux/time.h>
 
 // Timer 0をクロックタイマーとして使用する
-static uint64_t jiffies = 0;
+uint64_t jiffies = 0;
+/* 現在時刻 (wall_time) */
+struct timespec xtime  __attribute__ ((aligned (16)));
+/* 直近のwall_time更新時のjiffies */
+uint64_t wall_jiffies = 0;
+/* jiffies, xtime, wall_jiffies を保護 */
+struct spinlock clocklock;
+
+uint64_t tick_usec = TICK_USEC;        /* USER_HZ period (usec) */
+uint64_t tick_nsec = TICK_NSEC;        /* ACTHZ period (nsec) */
+
+// 現在時の更新
+static void update_wall_time(uint64_t ticks)
+{
+    do {
+        ticks--;
+        xtime.tv_nsec += TICK_NSEC;         // 1 tick = 10ms = 10 * 10^6
+        if (xtime.tv_nsec >= 1000000000) {  // nsec部分が1秒を超えたら
+            xtime.tv_nsec -= 1000000000;    // nsecから1秒引いて
+            xtime.tv_sec++;                 // secに1秒足す
+        }
+    } while (ticks);
+}
+
+// 現在時の調整
+static inline void update_times(void)
+{
+    uint64_t ticks;
+
+    ticks = jiffies - wall_jiffies;
+    if (ticks) {
+        wall_jiffies += ticks;
+        update_wall_time(ticks);
+    }
+}
 
 void clock_init(void)
 {
@@ -15,18 +50,91 @@ void clock_init(void)
     irq_register(GIC_PPI(11), clock_intr, 0);
     irq_enable(GIC_PPI(11));
 
+    initlock(&clocklock, "clock");
+
+    // rtc_init()で設定
+#if 0
+    if (rtc_gettime(&xtime) < 0) {
+        xtime.tv_nsec = 0L;
+        xtime.tv_sec = 1793844559;  // 2026-11-05 11:09:19
+    }
+#endif
+
     info("clock_init ok");
 }
 
 void clock_intr(void *param)
 {
-    // pendingビットをクリア
+    acquire(&clocklock);
+    ++jiffies;
+    update_times();
+    //wakeup(&jiffies);
+    release(&clocklock);
+
+    //run_timer_list();
+
     arm_vtimer_reset();
-    if ((++jiffies % 100) == 0)
-        ; // no op
-        //cprintf("*");
-    // 時刻更新処理
-    //update_proc_time();
+}
+
+long clock_gettime(clockid_t clk_id, uint64_t tpp)
+{
+    struct timespec tp;
+    struct proc *p = thisproc();
+    int ret = 0;
+
+    switch(clk_id) {
+        default:
+            ret = -EINVAL;
+        case CLOCK_REALTIME:
+            acquire(&clocklock);
+            tp.tv_nsec = xtime.tv_nsec;
+            tp.tv_sec = xtime.tv_sec;
+            release(&clocklock);
+            ret = copyout(p->pgdir, (struct timespec *)tpp, &tp, sizeof(tp));
+            break;
+        case CLOCK_PROCESS_CPUTIME_ID:
+#if 0
+            acquire(&clocklock);
+            ptime = (p->stime + p->utime) * TICK_NSEC;
+            tp->tv_nsec = ptime % 1000000000;
+            tp->tv_sec  = ptime / 1000000000;
+            release(&clocklock);
+#endif
+            ret = -EINVAL;
+            break;
+    }
+#if 0
+    static int count = 0;
+    if ((++count % 1000) == 0)
+        debug("[%d] clk: %d, tv_sec: %lld, tv_nsec: %lld", count, clk_id, tp->tv
+_sec, tp->tv_nsec);
+#endif
+    return ret;
+}
+
+long clock_settime(clockid_t clk_id, uint64_t tpp)
+{
+    struct timespec tp;
+    int ret = 0;
+
+    switch(clk_id) {
+        default:
+            ret = -EINVAL;
+        case CLOCK_REALTIME:
+            //if (capable(CAP_SYS_TIME)) {
+            if ((ret = copyin(thisproc()->pgdir, (char *)&tp, tpp, sizeof(tp))) < 0)
+                break;
+            acquire(&clocklock);
+            xtime.tv_nsec = tp.tv_nsec;
+            xtime.tv_sec = tp.tv_sec;
+            release(&clocklock);
+            rtc_settime(&tp);
+            //} else {
+            //    return -EPERM;
+            //}
+            break;
+    }
+    return ret;
 }
 
 #if 0

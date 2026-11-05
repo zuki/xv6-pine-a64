@@ -100,7 +100,7 @@ struct dirent {
 
 #define ROOTDEV         (minor(DEVV6))      // Device number of file system root disk
 
-#define SDMAJOR         (major(DEVV6))
-#define TTYMAJOR        (major(DEVCONS))
+//#define SDMAJOR         (major(DEVV6))
+//#define TTYMAJOR        (major(DEVCONS))
 
 #endif

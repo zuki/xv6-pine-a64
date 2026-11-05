@@ -24,6 +24,7 @@
 #include <linux/stat.h>
 #include <linux/errno.h>
 #include <vm.h>
+#include <rtc.h>
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
@@ -245,6 +246,9 @@ void iupdate(struct inode *ip)
     dip->nlink = ip->nlink;
     dip->size = ip->size;
     dip->mode = ip->mode;
+    memmove(&dip->atime, &ip->atime, sizeof(struct timespec));
+    memmove(&dip->mtime, &ip->mtime, sizeof(struct timespec));
+    memmove(&dip->ctime, &ip->ctime, sizeof(struct timespec));
     memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
     bwrite(bp);
     brelse(bp);
@@ -258,6 +262,7 @@ void iupdate(struct inode *ip)
 static struct inode *iget(uint32_t dev, uint32_t inum)
 {
     struct inode *ip, *empty;
+    struct timespec tp;
 
     acquire(&icache.lock);
     trace("acq icache");
@@ -283,6 +288,10 @@ static struct inode *iget(uint32_t dev, uint32_t inum)
     ip->inum = inum;
     ip->ref = 1;
     ip->valid = 0;
+    rtc_gettime(&tp);
+    memmove(&ip->atime, &tp, sizeof(tp));
+    memmove(&ip->mtime, &tp, sizeof(tp));
+    memmove(&ip->ctime, &tp, sizeof(tp));
     release(&icache.lock);
 
     return ip;
@@ -324,6 +333,10 @@ void ilock(struct inode *ip)
         ip->nlink = dip->nlink;
         ip->size = dip->size;
         ip->mode = dip->mode;
+        memmove(&ip->atime, &dip->atime, sizeof(struct timespec));
+        memmove(&ip->mtime, &dip->mtime, sizeof(struct timespec));
+        memmove(&ip->ctime, &dip->ctime, sizeof(struct timespec));
+
         memmove(ip->addrs, dip->addrs, sizeof(ip->addrs));
         brelse(bp);
         ip->valid = 1;
@@ -524,6 +537,9 @@ int stati(struct inode *ip, uint64_t stp)
     st.st_size = ip->size;
     st.st_blksize = 1024;
     st.st_blocks  = (ip->size / st.st_blksize) + 1;
+    memmove(&st.st_atime, &ip->atime, sizeof(struct timespec));
+    memmove(&st.st_mtime, &ip->mtime, sizeof(struct timespec));
+    memmove(&st.st_ctime, &ip->ctime, sizeof(struct timespec));
 
     if (ip->type == T_DEVICE)
         st.st_rdev = ip->devno;

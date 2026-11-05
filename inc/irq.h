@@ -3,6 +3,7 @@
 #define INC_PERIPHERALS_IRQ_H
 
 #include <peripherals/base.h>
+#include <arm.h>
 
 #define GICD_BASE               (MMIO_BASE + 0x01c81000)
 #define GICC_BASE               (MMIO_BASE + 0x01c82000)
