@@ -4,9 +4,12 @@
 #include <irq.h>
 #include <spinlock.h>
 #include <uart.h>
+#include <file.h>
+#include <vm.h>
+#include <linux/fcntl.h>
 
 struct serial_channel g_channel;
-//static int panicked = -1;
+static int panicked = -1;
 
 #define C(x)  ((x)-'@')         // Control-x
 #define BACKSPACE 0x100
@@ -24,20 +27,19 @@ static void consputc(int c)
 
 static void console_intr1(char (*getc)())
 {
-    int c; /*, prof = 0; */
+    int c, prof = 0;
 
-    acquire(&g_channel.lock);
-#if 0
+    //acquire(&g_channel.lock);
     if (panicked >= 0) {
-        release(&g_channel.lock);
+        //release(&g_channel.lock);
         while (1) ;
     }
-#endif
+
     while ((c = getc()) >= 0) {
         switch (c) {
-        //case C('P'):           // Process listing.
-        //    prof = 1;
-        //    break;
+        case C('P'):           // Process listing.
+            prof = 1;
+            break;
         case C('U'):           // Kill line.
             while (g_channel.e != g_channel.w
                    && g_channel.buf[(g_channel.e - 1) % INPUT_BUF] != '\n') {
@@ -53,27 +55,25 @@ static void console_intr1(char (*getc)())
             }
             break;
         default:
-            if (c != 0 && g_channel.e - g_channel.r < INPUT_BUF) {
+            if (c != 0 && (g_channel.e - g_channel.r) < INPUT_BUF) {
                 c = (c == '\r') ? '\n' : c;
                 g_channel.buf[g_channel.e++ % INPUT_BUF] = c;
                 consputc(c);
                 if (c == '\n' || c == C('D')
-                    || g_channel.e == g_channel.r + INPUT_BUF) {
+                    || (g_channel.e - g_channel.r) == INPUT_BUF) {
                     g_channel.w = g_channel.e;
-                    //wakeup(&g_channel.r);
+                    wakeup(&g_channel.r);
                 }
             }
             break;
         }
     }
-    release(&g_channel.lock);
+    //release(&g_channel.lock);
 
-#if 0
     if (prof) {
         //mm_dump();
         procdump();
     }
-#endif
 }
 
 void console_intr(void *_p)
@@ -81,14 +81,79 @@ void console_intr(void *_p)
     console_intr1(uart_getchar);
 }
 
+static int consolewrite(int user_src, uint64_t src, int off, int n)
+{
+    for (int i = 0; i < n; i++) {
+        char c;
+        if (either_copyin(&c, user_src, src + i, 1) < 0)
+            break;
+        if (c == '\1')
+            c = 0x20;
+        uart_putchar(c);
+    }
+
+    return n;
+}
+
+static int consoleread(int user_dst, uint64_t dst, int off, int n)
+{
+    uint32_t bufsize = n;
+
+    acquire(&g_channel.lock);
+    while (n > 0) {
+        // wait until interrupt handler has put some
+        // input into g_channel.buffer.
+        while (g_channel.r == g_channel.w) {
+            if (myproc()->killed) {
+                release(&g_channel.lock);
+                return -1;
+            }
+            sleep(&g_channel.r, &g_channel.lock);
+        }
+
+        int c = g_channel.buf[g_channel.r++ % INPUT_BUF];
+
+        if (c == C('D')) {  // end-of-file
+            if (n < bufsize) {
+                // Save ^D for next time, to make sure
+                // caller gets a 0-byte result.
+                g_channel.r--;
+            }
+            break;
+        }
+
+        // copy the input byte to the user-space buffer.
+        char cbuf = (c & 0xff);
+        if (either_copyout(user_dst, dst, &cbuf, 1) < 0)
+            break;
+
+        ++dst;
+        --n;
+
+        if(c == '\n') {
+            // a whole line has arrived, return to
+            // the user-level read().
+            break;
+        }
+    }
+    release(&g_channel.lock);
+
+    return bufsize - n;
+}
+
 void console_init(void)
 {
     initlock(&g_channel.lock, "console");
     uart_init();
 
+    devsw[CONSOLE].read = consoleread;
+    devsw[CONSOLE].write = consolewrite;
+
+    set_gicd_itarget(IRQ_UART0, 0x0f);
     irq_register(IRQ_UART0, console_intr, 0);
     irq_enable(IRQ_UART0);
-    //info("console_init ok");
+
+    info("console_init ok");
 }
 
 static void printint(int64_t x, int base, int sign, int zero, int col)
@@ -122,13 +187,6 @@ void vprintfmt(void (*putch)(int), const char *fmt, va_list ap)
 {
     int i, c, j;
     char *s;
-
-#if 0
-    if (panicked >= 0 && panicked != cpuid()) {
-        release(&g_channel.lock);
-        while (1);
-    }
-#endif
 
     for (i = 0; (c = fmt[i] & 0xff) != 0; i++) {
         if (c != '%') {
@@ -225,36 +283,62 @@ void cprintf1(const char *fmt, ...)
     va_end(ap);
 }
 
-void hexdump(const void *data, size_t size, const char *name)
+void hexdump(const void *data, size_t size, const char *name, bool desc)
 {
     unsigned char *src;
     int offset, index;
 
     src = (unsigned char *)data;
-    cprintf("=== %s dump ===\n", name ? name : "");
+    cprintf("=== %s dump (%s) ===\n", name ? name : "", desc ? "descending" : "ascendng");
     cprintf("+--------------------+-----------------------------------------+------------------+\n");
-    for (offset = 0; offset < (int)size; offset += 16) {
-        cprintf("| 0x%016lx | ", (uint64_t)src + offset);
-        for (index = 0; index < 16; index+=2) {
-            if (offset + index < (int)size) {
-                cprintf("%02x%02x ", 0xff & src[offset + index], 0xff & src[offset + index + 1]);
-            } else {
-                cprintf("     ");
-            }
-        }
-        cprintf("| ");
-        for (index = 0; index < 16; index++) {
-            if (offset + index < (int)size) {
-                if (isascii(src[offset + index]) && isprint(src[offset + index])) {
-                    cprintf("%c", src[offset + index]);
+    if (desc) { // 降順
+        for (offset = -16; -offset <= size; offset -= 16) {
+            cprintf("| 0x%016lx | ", (uint64_t)src + offset);
+            for (index = 0; index < 16; index+=2) {
+                if (-(offset + index) <= (int)size) {
+                    cprintf("%02x%02x ", 0xff & src[offset + index], 0xff & src[offset + index + 1]);
                 } else {
-                    cprintf(".");
+                    cprintf("     ");
                 }
-            } else {
-                cprintf(" ");
             }
+            cprintf("| ");
+            for (index = 0; index < 16; index++) {
+                if (-(offset + index) <= (int)size) {
+                    if (isascii(src[offset + index]) && isprint(src[offset + index])) {
+                        cprintf("%c", src[offset + index]);
+                    } else {
+                        cprintf(".");
+                    }
+                } else {
+                    cprintf(" ");
+                }
+            }
+            cprintf(" |\n");
         }
-        cprintf(" |\n");
+    } else {    // 昇順
+        for (offset = 0; offset < (int)size; offset += 16) {
+            cprintf("| 0x%016lx | ", (uint64_t)src + offset);
+            for (index = 0; index < 16; index+=2) {
+                if (offset + index < (int)size) {
+                    cprintf("%02x%02x ", 0xff & src[offset + index], 0xff & src[offset + index + 1]);
+                } else {
+                    cprintf("     ");
+                }
+            }
+            cprintf("| ");
+            for (index = 0; index < 16; index++) {
+                if (offset + index < (int)size) {
+                    if (isascii(src[offset + index]) && isprint(src[offset + index])) {
+                        cprintf("%c", src[offset + index]);
+                    } else {
+                        cprintf(".");
+                    }
+                } else {
+                    cprintf(" ");
+                }
+            }
+            cprintf(" |\n");
+        }
     }
     cprintf("+--------------------+-----------------------------------------+------------------+\n\n");
 

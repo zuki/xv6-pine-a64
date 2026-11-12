@@ -15,8 +15,8 @@
 #define UIO_MAXIOV 1024
 
 #define FILE_STATUS_FLAGS (O_APPEND|O_ASYNC|O_DIRECT|O_DSYNC|O_NOATIME|O_NONBLOCK|O_SYNC)
-#define FILE_READABLE(flags) ((((flags) & O_ACCMODE) == O_RDWR) || (((flags) & O_ACCMODE) == O_RDONLY));
-#define FILE_WRITABLE(flags) ((((flags) & O_ACCMODE) == O_RDWR) || (((flags) & O_ACCMODE) == O_WRONLY));
+#define FILE_READABLE(f) (((((f)->flags) & O_ACCMODE) == O_RDWR) || ((((f)->flags) & O_ACCMODE) == O_RDONLY));
+#define FILE_WRITABLE(f) (((((f)->flags) & O_ACCMODE) == O_RDWR) || ((((f)->flags) & O_ACCMODE) == O_WRONLY));
 
 // in-memory copy of an inode
 struct inode {
@@ -37,10 +37,10 @@ struct inode {
 #if 0
     uid_t uid;                  // 所有者のユーザーID
     gid_t gid;                  // 所有者のグループID
+#endif
     struct timespec atime;      // 最新アクセス日時
     struct timespec mtime;      // 最新更新日時
     struct timespec ctime;      // 作成日時
-#endif
     uint32_t addrs[NDIRECT+2];  // データブロックのアドレス
 };
 
@@ -63,9 +63,9 @@ struct file {
  * device functions
  */
 struct devsw {
-    int (*read)(int user_dst, uint64_t dst, int off, int n, char blocking, void *content);
-    int (*write)(int user_src, uint64_t src, int off, int n, void *content);
-    struct termios *termios;
+    int (*read)(int user_dst, uint64_t dst, int off, int n);
+    int (*write)(int user_src, uint64_t src, int off, int n);
+    //struct termios *termios;
 };
 
 extern struct devsw devsw[];
@@ -76,8 +76,8 @@ struct file *   filedup(struct file *f);
 int             fileopen(char *path, int dirfd, int flags, mode_t mode);
 void            fileclose(struct file *f);
 int             filestat(struct file *f, uint64_t addr);
-ssize_t         fileread(struct file *f, uint64_t addr, ssize_t n);
-ssize_t         filewrite(struct file *f, uint64_t addr, ssize_t n);
+ssize_t         fileread(struct file *f, uint64_t addr, ssize_t n, int user);
+ssize_t         filewrite(struct file *f, uint64_t addr, ssize_t n, int user);
 off_t           filelseek(struct file *f, off_t offset, int whence);
 int             filelink(char *oldpath, int olddirfd, char *newpath, int newdirfd);
 int             fileunlink(char *path, int dirfd, int flags);
@@ -88,6 +88,7 @@ int             filechmod(struct file *f, char *path, int dirfd, mode_t mode);
 int             filemknod(char *path, mode_t mode, device_t dev);
 int             filechdir(char *path);
 int             fdalloc(struct file *f, int from);
+int             filewriteback(struct file *file, off_t offset, uint64_t addr);
 
 #if 0
 int             filechown(struct file *f, char *path, uid_t owner, gid_t group);
@@ -101,8 +102,8 @@ int             mount(char *source, char *target, char *fstype, uint64_t flags, 
 int             umount(char *target, int flags);
 #endif
 
-int             devnull_read(int user_dst, uint64_t dst, int off, int n, char blocking, void *content);
-int             devnull_write(int user_src, uint64_t src, int off, int n, void *content);
-int             devzero_read(int user_dst, uint64_t dst, int off, int n, char blocking, void *content);
+int             devnull_read(int user_dst, uint64_t dst, int off, int n);
+int             devnull_write(int user_src, uint64_t src, int off, int n);
+int             devzero_read(int user_dst, uint64_t dst, int off, int n);
 
 #endif

@@ -24,7 +24,7 @@ struct devsw devsw[NDEV];
 // ファイルテーブル
 struct {
     struct spinlock lock;
-    struct file file[NFILE];
+    struct file file[NOFILE];
 } ftable;
 
 static void init_devfs();
@@ -43,7 +43,7 @@ struct file *filealloc(void)
     struct file *f;
 
     acquire(&ftable.lock);
-    for (f = ftable.file; f < ftable.file + NFILE; f++) {
+    for (f = ftable.file; f < ftable.file + NOFILE; f++) {
         if (f->ref == 0) {
             f->ref = 1;
             release(&ftable.lock);
@@ -69,7 +69,7 @@ static struct inode *create(char *path, int dirfd, int16_t type, uint16_t major,
 {
     struct inode *ip, *dp;
     char name[DIRSIZ];
-    //struct timespec ts;
+    struct timespec ts;
     int error = -EINVAL;
 
     if ((dp = nameiparent(path, name, dirfd)) == 0)
@@ -104,9 +104,9 @@ static struct inode *create(char *path, int dirfd, int16_t type, uint16_t major,
     ip->nlink = 1;
     ip->mode  = mode/* & ~(myproc()->umask) */;
     ip->type  = type;
-#if 0
-    clock_gettime(0, CLOCK_REALTIME, &ts);
+    clock_gettime(CLOCK_REALTIME, (uint64_t)&ts, 0);
     ip->atime = ip->mtime = ip->ctime = ts;
+#if 0
     ip->uid   = myproc()->uid;
     ip->gid   = myproc()->gid;
 #endif
@@ -187,11 +187,10 @@ loop:
             goto loop;
         }
     }
-    int readable = FILE_READABLE((int)flags);
-    int writable = FILE_WRITABLE((int)flags);
-    if (readable && ((error = permission(ip, MAY_READ)) < 0))
+
+    if ((error = permission(ip, MAY_READ)) < 0)
         goto bad;
-    if (writable && ((error = permission(ip, MAY_WRITE)) < 0))
+    if ((error = permission(ip, MAY_WRITE)) < 0)
         goto bad;
     if ((f = filealloc()) == 0 || (fd = fdalloc(f, 0)) < 0) {
         iunlock(ip);
@@ -223,14 +222,14 @@ loop:
 
     f->ip       = ip;
     f->flags    = flags;
-    f->readable = readable;
-    f->writable = writable;
+    f->readable = !(flags & O_WRONLY);
+    f->writable = (flags & O_WRONLY) || (flags & O_RDWR);
 #if 0
     if (flags & O_CLOEXEC)
         bit_add(myproc()->fdflag, fd);
 #endif
 
-    debug("proc[%d], path: %s, fd: %d, flags: %d, mode: 0x%x", myproc()->pid, path, fd, f->flags, f->ip->mode);
+    trace("proc[%d], path: %s, fd: %d, flags: %d, mode: 0x%x", myproc()->pid, path, fd, f->flags, f->ip->mode);
     iunlock(ip);
     return fd;
 
@@ -245,8 +244,10 @@ void fileclose(struct file *f)
     struct file ff;
 
     acquire(&ftable.lock);
-    if (f->ref < 1)
-        panic("fileclose");
+    if (f->ref < 1) {
+        error("f: inum: %d, ref: %d", f->ip->inum, f->ref);
+        return;
+    }
     if (--f->ref > 0) {
         release(&ftable.lock);
         return;
@@ -284,6 +285,17 @@ void fileclose(struct file *f)
 // ファイルfに関するメタデータを取得する
 int filestat(struct file *f, uint64_t addr)
 {
+    int error;
+
+    if (f->type == FD_INODE || f->type == FD_DEVICE) {
+        ilock(f->ip);
+        error = stati(f->ip, addr);
+        iunlock(f->ip);
+        return error;
+    }
+    return -EFAULT;
+
+#if 0
     struct task_struct *p = myproc();
     struct stat st;
     int error;
@@ -299,27 +311,33 @@ int filestat(struct file *f, uint64_t addr)
         return 0;
     }
     return -EFAULT;
+#endif
 }
 
 static int procfs_read(struct file *f, uint64_t dst, size_t n);
 static int procfs_write(struct file *f, uint64_t src, size_t n);
 
 /* ファイルfを読み取る */
-ssize_t fileread(struct file *f, uint64_t addr, ssize_t n)
+ssize_t fileread(struct file *f, uint64_t addr, ssize_t n, int user)
 {
     ssize_t r = 0;
+
+    if (f->readable == 0) {
+        error("f must be readable");
+        return -1;
+    }
 
     if (f->type == FD_PIPE) {
         r = piperead(f->pipe, addr, n);
     } else if (f->type == FD_DEVICE) {
-        if (f->major < 0 || f->major >= NDEV || !devsw[f->major].read)
+        if (!devsw[f->major].read)
             return -EBADF;
-        r = devsw[f->major].read(1, addr, 0, n, !f->nonblocking, f->content);
+        r = devsw[f->major].read(user, addr, 0, n);
     } else if (f->type == FD_INODE) {
         ilock(f->ip);
-        if ((r = readi(f->ip, 1, addr, f->off, n)) > 0)
+        if ((r = readi(f->ip, user, addr, f->off, n)) > 0)
             f->off += r;
-        //clock_gettime(CLOCK_REALTIME, &f->ip->atime);
+        clock_gettime(CLOCK_REALTIME, (uint64_t)&f->ip->atime, 0);
         iunlock(f->ip);
     }
 #ifdef CONFIG_FAT
@@ -371,7 +389,7 @@ ssize_t fileread(struct file *f, uint64_t addr, ssize_t n)
     }
 #endif
     else if (f->type == FD_PROCFS) {
-        return procfs_read(f, addr, n);
+        r = procfs_read(f, addr, n);
     } else {
         error("invalid file type: %d", f->type);
         r = -EINVAL;
@@ -391,7 +409,7 @@ int filepread64(struct file *f, void *buf, size_t count, off_t offset)
         return old_off;
     if ((error = filelseek(f, offset, SEEK_SET)) < 0)
         return error;
-    n = fileread(f, (char *)buf, count);
+    n = fileread(f, (char *)buf, count, 1);
     if ((error = filelseek(f, old_off, SEEK_SET)) < 0)
         return error;
     return n;
@@ -399,19 +417,20 @@ int filepread64(struct file *f, void *buf, size_t count, off_t offset)
 #endif
 
 /* ファイル fに書き込む. */
-ssize_t filewrite(struct file *f, uint64_t addr, ssize_t n)
+ssize_t filewrite(struct file *f, uint64_t addr, ssize_t n, int user)
 {
     ssize_t r = 0;
-    //struct timespec ts;
+    struct timespec ts;
 
     if (f->writable == 0)
         return -EBADF;
+
     if (f->type == FD_PIPE) {
         r = pipewrite(f->pipe, addr, n);
     } else if (f->type == FD_DEVICE) {
-        if (f->major < 0 || f->major >= NDEV || !devsw[f->major].write)
+        if (!devsw[f->major].write)
             return -EINVAL;
-        r = devsw[f->major].write(1, addr, f->off, n, f->content);
+        r = devsw[f->major].write(user, addr, f->off, n);
     } else if (f->type == FD_INODE) {
         /*
          * 最大ログトランザクションサイズを超えないように、
@@ -426,15 +445,16 @@ ssize_t filewrite(struct file *f, uint64_t addr, ssize_t n)
         while (i < n) {
             ssize_t n1 = MIN(max, n - i);
             ilock(f->ip);
-            if ((r = writei(f->ip, 1, addr + i, f->off, n1)) > 0)
+            if ((r = writei(f->ip, user, addr + i, f->off, n1)) > 0)
 #if 0
              && (f->ip->type == T_FILE)) {
                 update_page(f->off, f->ip->inum, f->ip->dev, addr + i, r);
                 f->off += r;
              }
-            clock_gettime(CLOCK_REALTIME, &ts);
-            f->ip->mtime = f->ip->atime = ts;
 #endif
+            clock_gettime(CLOCK_REALTIME, (uint64_t)&ts, 0);
+            f->ip->mtime = f->ip->atime = ts;
+
             iunlock(f->ip);
 
             if (r < 0) break;
@@ -575,7 +595,7 @@ off_t filelseek(struct file *f, off_t offset, int whence)
     }
 
 bad:
-    debug("invalid offset %d", offset)
+    error("invalid offset %d", offset)
     return -EINVAL;
 }
 
@@ -633,7 +653,7 @@ int filesymlink(char *target, char *linkpath, int dirfd)
     char name[DIRSIZ];
     struct inode *dp, *ip;
     int error;
-    //struct timespec ts;
+    struct timespec ts;
 
     if ((dp = nameiparent(linkpath, name, dirfd)) == 0) {
         return -ENOENT;
@@ -650,10 +670,8 @@ int filesymlink(char *target, char *linkpath, int dirfd)
     ip->nlink = 1;
     ip->mode = S_IFLNK | 0777;
     ip->type = T_SYMLINK;
-#if 0
-    clock_gettime(CLOCK_REALTIME, &ts);
+    clock_gettime(CLOCK_REALTIME, (uint64_t)&ts, 0);
     ip->atime = ip->mtime = ip->ctime = ts;
-#endif
     iupdate(ip);
 
     if ((error = dirlink(dp, name, ip->inum, ip->type)) != 0) {
@@ -820,12 +838,12 @@ int utimensat(char *path, struct timespec times[2])
     ilock(ip);
     // TODO: 権限チェックが必要
     if (times == NULL) {
-        clock_gettime(CLOCK_REALTIME, &ts);
+        clock_gettime(CLOCK_REALTIME, &ts, 1);
         ip->atime = ip->mtime = ts;
     } else {
         for (int i = 0; i < 2; i++) {
             if (times[i].tv_nsec == UTIME_NOW) {
-                clock_gettime(CLOCK_REALTIME, &ts);
+                clock_gettime(CLOCK_REALTIME, &ts, 1);
                 if (i == 0) ip->atime = ts;
                 else        ip->mtime = ts;
             } else if (times[i].tv_nsec == UTIME_OMIT) {
@@ -1013,7 +1031,7 @@ static int rename(struct inode *dp, char *name1, char *name2)
         return -ENOSPC;
     }
     iupdate(dp);
-    //clock_gettime(CLOCK_REALTIME, &ip->ctime);
+    //clock_gettime(CLOCK_REALTIME, &ip->ctime, 0);
     iupdate(ip);
     iunlockput(ip);
     iunlockput(dp);
@@ -1026,7 +1044,7 @@ static int reinode(struct inode *dp, struct inode *old_ip, struct inode *new_ip,
 {
     struct dirent de;
     size_t off;
-    //struct timespec ts;
+    struct timespec ts;
     int error;
 
     ilock(dp);
@@ -1046,10 +1064,8 @@ static int reinode(struct inode *dp, struct inode *old_ip, struct inode *new_ip,
         goto bad;
     }
     iupdate(dp);
-#if 0
-    clock_gettime(CLOCK_REALTIME, &ts);
+    clock_gettime(CLOCK_REALTIME, (uint64_t)&ts, 0);
     old_ip->ctime = new_ip->ctime = ts;
-#endif
     iupdate(old_ip);
     iupdate(new_ip);
     error = iunlink(dp, old_ip, old_ip->type == T_DIR ? AT_REMOVEDIR : 0);
@@ -1264,6 +1280,31 @@ bad2:
 }
 #endif
 
+int filewriteback(struct file *file, off_t offset, uint64_t addr)
+{
+    int r;
+    struct timespec ts;
+    struct inode *ip = file->ip;
+
+    size_t n = offset + PGSIZE > ip->size ? ip->size - offset : PGSIZE;
+
+    // ip->sizeもoffsetも0の場合があり、この場合は1ページ書き戻す
+    if (n == 0) n = PGSIZE;
+
+    trace("ip size=%d, offset=%d, n=%d", ip->size, offset, n);
+    trace("addr[0]='%c', addr[1]='%c'", ((char *)addr)[0], ((char *)addr)[2]);
+
+    ilock(ip);
+    r = writei(ip, 0, addr, offset, n);
+    clock_gettime(CLOCK_REALTIME, (uint64_t)&ts, 0);
+    memmove(&ip->mtime, &ts, sizeof(struct timespec));
+    memmove(&ip->atime, &ts, sizeof(struct timespec));
+    iunlock(ip);
+
+    return r == n ? r : -EIO;
+}
+
+
 // TODO: procfs
 static int procfs_read(struct file *f, uint64_t dst, size_t n)
 {
@@ -1363,17 +1404,17 @@ int procfs_parse_usercontent(struct file *f)
 #endif
 }
 
-int devnull_read(int user_dst, uint64_t dst, int off, int n, char blocking, void *content)
+int devnull_read(int user_dst, uint64_t dst, int off, int n)
 {
     return 0;
 }
 
-int devnull_write(int user_src, uint64_t src, int off, int n, void *content)
+int devnull_write(int user_src, uint64_t src, int off, int n)
 {
     return 0;
 }
 
-int devzero_read(int user_dst, uint64_t dst, int off, int n, char blocking, void *content)
+int devzero_read(int user_dst, uint64_t dst, int off, int n)
 {
     char zeros[64] = { 0 };
     int target = n;

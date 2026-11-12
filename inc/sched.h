@@ -12,6 +12,7 @@
 #include <irq.h>
 #include <utils.h>
 #include <linux/resources.h>
+#include <slab.h>
 
 #define THREAD_SIZE     PAGE_SIZE          // タスクごとのカーネルスタックサイズ
 
@@ -43,7 +44,9 @@ struct cpu_context {
     uint64_t    fp;
     uint64_t    sp;
     uint64_t    pc;
-}; // 13 regs
+    uint64_t    padding;
+    uint64_t    q0[2];
+}; // 16 regs
 
 struct user_page {
     uint64_t    phys_addr;
@@ -53,30 +56,46 @@ struct user_page {
 struct trapframe {
     uint64_t regs[31];
     uint64_t sp, pc, pstate;
+    uint64_t q0[2];
     uint64_t stackframe[2];     // 巻き戻し用
+};
+
+extern struct slab_cache *VMA;
+
+// vma (virtual memory map area)構造体 */
+struct vma {
+    uintptr_t       addr;       /* 先頭アドレス */
+    size_t          length;     /* 領域長 */
+    int             prot;       /* vma属性 */
+    int             flags;      /* vmaフラグ */
+    struct file *   f;          /* mapしているファイル */
+    off_t           offset;     /* この領域のファイル内のオフセット */
+    struct vma *    next;       /* 次のvmaへのポインタ */
 };
 
 // ユーザタスクのVM: VMはユーザタスク間で共有される場合がある。
 // カーネルスレッドでは使用されない
 // TODO: kernel_pagesはlistにしたほうが良い
+// FIXME: 現在、szとcodeszは同じ値であり区別がない。fileszとmemszのような区別が必要か?
 struct mm_struct {
-    int ref;                    // このmm_structを参照しているtask_structsの数
-    struct spinlock lock;       // 以下のすべてのフィールドを保護する
-    uint64_t pgd;               // 物理アドレス。ttbr0 (user va)にロードされる
-    uint64_t sz;                // ファイルサイズ: ユーザタスク用。VA
-    uint64_t codesz;            // コードサイズ: ユーザタスク用。VA
-    int user_pages_count;       // このタスクで使われているユーザページ数
-    int kernel_pages_count;     // このタスクで使われているカーネルページ数
-    uint64_t kernel_pages[MAX_TASK_KER_PAGES];  // カーネルページ. PA　pgtable用など
+    int ref;                    // このmm_structを参照しているtask_structsの数 : 4 ( + 4)
+    struct spinlock lock;       // 以下のすべてのフィールドを保護する            : 24
+    uint64_t pgd;               // page global dir: pa。ttbr0_el1にロード    : 8
+    uint64_t sz;                // ファイルサイズ: ユーザタスク用。VA           : 8
+    uint64_t codesz;            // コードサイズ: ユーザタスク用。VA             : 8
+    int user_pages_count;       // このタスクで使われているユーザページ数         : 4
+    int kernel_pages_count;     // このタスクで使われているカーネルページ数       : 4
+    uint64_t kernel_pages[MAX_TASK_KER_PAGES];  // カーネルページ. PA　pgtable用など : 8 * 96
+    struct vma *vmas;           // 仮想メモリマッピング領域構造体へのリンク
 };
 
 // タスクを記述する構造体
 struct task_struct {
     // このタスクのプライベートデータ。task->lockは不要
-    struct cpu_context cpu_context; // 最初にある必要がある。レジスタ値
-    struct file *ofile[NOFILE];     // Openしているファイル
-    struct inode *cwd;              // カレントディレクトリ
-    char name[16];                  // タスク名 (デバッグ用)
+    struct cpu_context cpu_context; // 最初にある必要がある。レジスタ値   : 8 * 16
+    struct file *ofile[NOFILE];     // Openしているファイル             : 8 * 16
+    struct inode *cwd;              // カレントディレクトリ             : 8
+    char name[16];                  // タスク名 (デバッグ用)            : 16
     struct mm_struct *mm;           // UTでは共有あり、KTはなし
     uint64_t flags;
     long preempt_count; // cf: preempt_enable()  TO DELETE
@@ -132,10 +151,10 @@ static inline struct cpu *mycpu(void) {
 
 #endif  // ! __ASSEMBLER__
 
-#define TASK_STRUCT_KILLED_OFFSET   304     // see above
+#define TASK_STRUCT_KILLED_OFFSET   328     // see above
 #define S_X0                        0       // 保存済スタックフレーム内のx0のオフセット
-#define S_STACKFRAME                272     // struct tramframeにおけるstackframeのオフセット
-#define S_FRAME_SIZE                288     // struct tramframeのサイズ
+#define S_STACKFRAME                288     // struct tramframeにおけるstackframeのオフセット
+#define S_FRAME_SIZE                304     // struct tramframeのサイズ
 
 #ifndef __ASSEMBLER__
 
@@ -150,7 +169,7 @@ void switch_to(struct task_struct *next);
 void timer_tick(void);
 int wakeup(void *chan);
 void sleep(void *chan, struct spinlock *lk);
-int wait4(int pid, int *status, int options, struct rusage *rusage);
+int wait4(int pid, uint64_t statusp, int options, uint64_t rusagep);
 //int wait(uint64_t addr);
 void exit_process(int status);
 int kill(int pid);

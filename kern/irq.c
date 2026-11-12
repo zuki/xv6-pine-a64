@@ -25,7 +25,8 @@ const char *entry_error_messages[] = {
 
     [SYNC_ERROR]            = "Unhandled EL0 sync exception",
     [SYSCALL_ERROR]         = "SYSCALL_ERROR",
-    [DATA_ABORT_ERROR]      = "Unhandled EL0 data abort (after kernel's trying)"
+    [DATA_ABORT_ERROR]      = "Unhandled EL0 data abort (after kernel's trying)",
+    [UNDEFUN_SYSCALL]       = "Undefined syscall"
 };
 
 static void (*handler[IRQ_LINES])(void *);
@@ -71,104 +72,74 @@ void irq_init_gicd(void)
 #endif
 
     uint32_t nlines = arm_gic_nlines();
-    uint32_t irq;
+    uint32_t idx;
 
     /* gicdを無効にする */
     put32(GICD_CTLR, GICD_CTLR_DISABLE);
 
-    //for (irq = GIC_IRQ_SPI; irq < nlines / 32; irq += 32) {
-    for (irq = 0; irq < nlines / 32; irq += 32) {
-        put32(GICD_IGROUPRn + 4 * irq, 0x00000000);     /* SPIs group 0 */
-        put32(GICD_ICENABLERn + 4 * irq, 0xFFFFFFFF);   /* SPIs disabled */
+    // SGIとPPIの設定
+    put32(GICD_ICENABLERn, 0xffffffff);
+    put32(GICD_ICPENDRn, 0xffffffff);
+    put32(GICD_ICACTIVERn, 0xffffffff);
+
+    for (uint32_t i = 0; i < 2; i++) {
+        put32(GICD_ICFGRn + 4 * i, 0x55555555);
     }
 
-    //for (irq = GIC_IRQ_SPI; irq < nlines / 16; irq += 16) {
-    for (irq = 0; irq < nlines / 16; irq += 16) {
-        put32(GICD_ICFGRn + 4 + irq, 0x55555555);       /* SPIs level sensitive */
+    // GICD_ITARGETSR 0-7はRead Only
+    for (uint32_t i = 0; i < 8 ; i++) {
+        put32(GICD_IPRIORITYRn + 4 * i, 0x80808080);    // SGIとPPIの優先度
     }
 
-    for (irq = GIC_IRQ_SPI; irq < nlines / 8; irq += 4) {
-        put32(GICD_IPRIORITYRn + 4 * irq, 0xF0F0F0F0);  /* SPI priority */
-        put32(GICD_ITARGETSRn + 4 * irq, 0x01010101);   /* SPI on CPU0 */
+    // SPIの設定
+    // nlines = 224
+    // 1レジスタ 32 irq -> 7 レジスタ
+    // すべての割り込みを無効にし、ペンディグをクリアし、割り込みをディアクティベート
+    for (idx = (GIC_IRQ_SPI / 32); idx < (nlines / 32); idx++) {
+        put32(GICD_ICENABLERn + 4 * idx, 0xffffffff);
+        put32(GICD_ICPENDRn + 4 * idx, 0xffffffff);
+        put32(GICD_ICACTIVERn + 4 * idx, 0xffffffff);
     }
 
-#if 0
-    /* gicを無効にする */
-    put32(GICD_CTLR, GICD_CTLR_DISABLE);
-
-    /* すべての割り込みを無効にし、ペンディグをクリアし、割り込みをディアクティベート : n < 4 */
-    /*   1割り込み1ビット */
-    for (int n = 0; n < IRQ_LINES / 32; n++) {
-        put32(GICD_ICENABLERn + 4 * n, 0xffffffff);
-        put32(GICD_ICPENDRn + 4 * n, 0xffffffff);
-        put32(GICD_ICACTIVERn + 4 * n, 0xffffffff);
+    //　1レジスタ 16 irq -> 14 レジスタ
+    // すべてのSPI割り込みをレベルトリガにセット
+    // 　　1割り込み2ビットで、高位ビットが0はレベルトリガ、1はエッジトリガ
+    for (idx = (GIC_IRQ_SPI / 16); idx < (nlines / 16); idx++) {
+        put32(GICD_ICFGRn + 4 * idx, 0x55555555);       /* SPIs level sensitive */
     }
 
-    /* すべての割り込みをデフォルト優先度 (0xa0) で、すべての割り込みをコア0だけに配信 : n < 39 */
-    /*    1割り込み8bit、優先度は値が小さいほど優先度が高い */
-    for (int n = 0; n < IRQ_LINES / 4; n++) {
-        put32(GICD_IPRIORITYRn + 4 * n, GICD_IPRIORITYR_DEFAULT
-              | GICD_IPRIORITYR_DEFAULT << 8
-              | GICD_IPRIORITYR_DEFAULT << 16
-              | GICD_IPRIORITYR_DEFAULT << 24);
-        /* 8ビットのうち 0x1はコア0に、0x2はコア1に、0x4はコア2に、0x8はコア3に配信する */
-        /*  ORでつなげることで複数のコアに配信できる */
-        put32(GICD_ITARGETSRn + 4 * n, GICD_ITARGETSR_CORE0
-              | GICD_ITARGETSR_CORE0 << 8
-              | GICD_ITARGETSR_CORE0 << 16 | GICD_ITARGETSR_CORE0 << 24);
+    // 1レジスタ 4 irq -> 56 レジスタ
+    // すべてのSPI割り込みをデフォルト優先度 (0xa0) で、すべてのSPI割り込みはコアに配信しない（登録時に個別に設定）
+    //    1割り込み8bit、優先度は値が小さいほど優先度が高い
+    for (idx = (GIC_IRQ_SPI / 4); idx < (nlines / 4); idx++) {
+        put32(GICD_IPRIORITYRn + 4 * idx, 0xa0a0a0a0);  /* SPI priority */
+        put32(GICD_ITARGETSRn + 4 * idx, 0x00000000);   /* SPI to no cpu */
     }
 
-    /* すべての割り込みをレベルトリガにセット : n < 9 */
-    /* 　　1割り込み2ビットで、高位ビットが0はレベルトリガ、1はエッジトリガ */
-    for (int n = 0; n < IRQ_LINES / 16; n++) {
-        put32(GICD_ICFGRn + 4 * n, GICD_ICFGR_LEVEL_SENSITIVE);
-    }
+    // gicdを有効にする
+    put32(GICD_CTLR, GICD_CTLR_ENABLE);
 
-    /* コア0のCPUインタフェースを初期化 */
-    /* 割り込みを通知する優先度のしきい値を0xF0とする */
-    put32(GICC_PMR, GICC_PMR_PRIORITY);
-#endif
-    //info("cpu0_init ok");
+    info("cpu0_init ok");
 }
 
 void irq_init_gicc(int core)
 {
     uint32_t iccicr;
 
-    put32(GICD_IGROUPRn, 0x00000000);       /* SGIとPPIはセキュア */
-    put32(GICD_ICENABLERn, 0x00000000);     /* PPIは無効  */
+    // giccを無効にする
+    put32(GICC_CTLR, 0x60);             // not signal Bypass IRQ/FIQ, Grp1 irq
 
-    for (uint32_t i = 0; i < 8 ; i++) {
-        put32(GICD_IPRIORITYRn + 4 * i, 0x80808080);    /* SGIとPPIの優先度 */
-    }
-
-    for (uint32_t i = 0; i < 4; i++) {
-        put32(GICD_ITARGETSRn + 4 * i, 0x01010101);
-    }
-
-    for (uint32_t i = 4; i < 8; i++) {
-        put32(GICD_ITARGETSRn + 4 * i, (core << 24 | core << 16 | core << 8 | core));
-    }
-
-    put32(GICC_BPR, GICC_BRP_NOPREMPT); /* プリエンプションをすべて無効にする */
-    put32(GICC_PMR, GICC_PMR_PRIORITY); /* Program the idle priority in the PMR */
+    put32(GICC_BPR, GICC_BRP_NOPREMPT);     // プリエンプションをすべて無効にする */
+    put32(GICC_PMR, GICC_PMR_PRIORITY);     // 0xFFより高い優先度の割り込みを通知（0xf0は通知しないので注意）
 
     iccicr = get32(GICC_CTLR);
-    /* Clear non-secure state GICC_CTLR bits to be configured below */
+    // 以下で構成するために非セキュアアクセス時のGICC_CTLRビットをクリア */
     iccicr &= ~(GICC_CTLR_EOIMODENS | GICC_CTLR_IRQBYPDISGRP1 | GICC_CTLR_FIRQBYPDISGRP1 | GICC_CTLR_ENABLE);
-    /* Enable the Group 1 interrupts and disable Group 1 bypass. */
+    // グループ1を有効化し、グループ1のバイパスを無効化する
     iccicr |= (GICC_CTLR_IRQBYPDISGRP1 | GICC_CTLR_FIRQBYPDISGRP1 | GICC_CTLR_ENABLE);
     put32(GICC_CTLR, iccicr);
 
-    /* gicdを有効にする */
-    put32(GICD_CTLR, GICD_CTLR_ENABLE);
-
-#if 0
-    for (int i = 0; i < 8; i++) {
-        debug("GICD_ITARGETSRn[%d]: 0x%08x", i, get32(GICD_ITARGETSRn + 4 * i));
-    }
-#endif
-    //info("cpu%d_init ok", cpuid());
+    info("cpu%d_init ok", cpuid());
 }
 
 void irq_enable(int i)
@@ -211,28 +182,26 @@ void irq_handler(void/*int user_mode */)
 {
     int nack = 0;
     uint32_t iar = get32(GICC_IAR);
-    uint32_t core = ((iar & GICC_IAR_CPUID__MASK) >> GICC_IAR_CPUID__SHIFT);
     uint32_t i = iar & GICC_IAR_INTERRUPT_ID__MASK;
-    if (i < IRQ_LINES) {
-        if (i > 15) {
-            /* Peripheral interrupts (PPI & SPI). */
-            if (i > 31)
-                debug("irq %d fired", i);
-#if 0
-            if (i == IRQ_UART0) {
-                debug("IRQ_UART0 fired");
-            } else if (i == IRQ_UART0) {
-                debug("IRQ_UART0 fired");
-            }
-#endif
-            nack += handle1(i);
-        } else {
-            /* Software generated interrupts (SGI). */
-            error("unimplemented, irq %d, core %d", i, core);
-        }
-        // フラグを消去
+
+    if (i >= 1020) {
         put32(GICC_EOIR, iar);
+        return;
     }
+
+    if (i < GIC_IRQ_PPI) {          // SGI
+        uint32_t core =
+                (iar & GICC_CPUID__MASK) >> GICC_CPUID__SHIFT;
+        debug("unimplemented, irq %d, core %d", i, core);
+    } else if (i < GIC_IRQ_SPI) {   // PPI
+        nack += handle1(i);
+    } else if (i >= GIC_IRQ_SPI) {  // SPI
+        nack += handle1(i);
+    } else {
+        panic("unimplemented, i: %d", i);
+    }
+
+    put32(GICC_EOIR, iar);
 
     if (nack == 0) {
         trace("unexpected interrupt, maybe sdhost or EC_UNKNOWN");
@@ -256,10 +225,15 @@ void irq_send_sgi_to_me(uint32_t irqno)
 }
 
 void show_invalid_entry_message(int type, uint64_t esr,
-    uint64_t elr, uint64_t far)
+    uint64_t elr, uint64_t far, uint64_t sysno)
 {
-    error("%s, esr: 0x%016llx, elr: 0x%016llx, far: 0x%016llx",
+    if (sysno) {
+        error("%s: %ld, esr: 0x%016llx, elr: 0x%016llx, far: 0x%016llx",
+        entry_error_messages[type], sysno, esr, elr, far);
+    } else {
+        error("%s, esr: 0x%016llx, elr: 0x%016llx, far: 0x%016llx",
         entry_error_messages[type], esr, elr, far);
+    }
     error("online esr decoder: %s0x%016llx", "https://esr.arm64.dev/#", esr);
     //show_stack(myproc(), "");
 }

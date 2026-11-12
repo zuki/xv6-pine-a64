@@ -72,36 +72,35 @@ int argptr(uint64_t addr, char *pp, size_t size)
     return -1;
 }
 
-#if 0
+int sys_set_tid_address(int *tidptr) {
+    trace("set_tid_address: name '%s', tidptr: %p", myproc()->name, tidptr);
+    // myproc()->clear_child_tid = tidptr;
+    return myproc()->pid;
+}
+
+// FIXME: always return 0 since we don't have signals  :)
+// int rt_sigprocmask(int how, const kernel_sigset_t *set,
+//                   kernel_sigset_t *oldset, size_t sigsetsize);
+int sys_rt_sigprocmask() {
+    trace("rt_sigprocmask: name '%s' how 0x%x", myproc()->name,
+            (int)myproc()->tf->x[0]);
+    return 0;
+}
+
+
 // int clock_gettime(clockid_t clock_id, struct timespec *tp);
 int sys_clock_gettime(clockid_t clock_id, uint64_t tpp)
 {
-    struct timespec *tp = (struct timespec *)tpp;
-    static int count = 0;
-
-    if ((++count % 1000) == 0)
-        trace("[%d] clk_id: %d, tp: 0x%p\n", count, clk_id, tp);
-
-    return clock_gettime(clk_id, tp);
+    return clock_gettime(clock_id, tpp, 1);
 }
 
-int sys_clock_settime(void)
+// int clock_settime(clockid_t clock_id, const struct timespec *tp);
+int sys_clock_settime(clockid_t clock_id, uint64_t tpp)
 {
-    clockid_t clk_id;
-    struct timespec *tp;
-
-    if (argint(0, (clockid_t *)&clk_id) < 0 || argptr(1, (void **)&tp, sizeof(struct timespec)) < 0)
-        return -EINVAL;
-
-    trace("clk_id: %d, tp: 0x%p\n", clk_id, tp);
-
-#ifdef USING_RASPI
-    rtc_settime(tp);
-#endif
-
-    return clock_settime(clk_id, tp);
+    return clock_settime(clock_id, tpp);
 }
 
+#if 0
 //  int nanosleep(const struct timespec *req, struct timespec *rem);
 int sys_nanosleep(void)
 {
@@ -161,7 +160,7 @@ void * const syscalls[] = {
     //[SYS_pread64] = sys_pread64,                // 67
     //[SYS_ppoll] = sys_ppoll,                    // 73
     [SYS_readlinkat] = (func)sys_readlinkat,    // 78
-    //[SYS_newfstatat] = sys_fstatat,             // 79
+    [SYS_newfstatat] = sys_fstatat,             // 79
     [SYS_fstat] = sys_fstat,                    // 80
     //[SYS_fsync] = sys_fsync,                    // 82
     //[SYS_fdatasync] = sys_fdatasync,            // 83
@@ -169,19 +168,19 @@ void * const syscalls[] = {
     [SYS_exit] = sys_exit,                      // 93
     // FIXME: exit_group should kill every thread in the current thread group.
     [SYS_exit_group] = sys_exit_group,          // 94
-    //[SYS_set_tid_address] = sys_set_tid_address,  // 96 OK
+    [SYS_set_tid_address] = sys_set_tid_address,  // 96 OK
     //[SYS_nanosleep] = sys_nanosleep,            // 101
     //[SYS_getitimer] = sys_getitimer,            // 102
     //[SYS_setitimer] = sys_setitimer,            // 103
-    //[SYS_clock_settime] = sys_clock_settime,    // 112
-    //[SYS_clock_gettime] = sys_clock_gettime,    // 113
+    [SYS_clock_settime] = sys_clock_settime,    // 112
+    [SYS_clock_gettime] = sys_clock_gettime,    // 113
     //[SYS_sched_getaffinity] = sys_sched_getaffinity, // 123
     //[SYS_sched_yield] = sys_yield,              // 124
     //[SYS_kill] = sys_kill,                      // 129
     //[SYS_tkill] = sys_tkill,                    // 130
     //[SYS_rt_sigsuspend] = sys_rt_sigsuspend,    // 133
     //[SYS_rt_sigaction] = sys_rt_sigaction,      // 134
-    //[SYS_rt_sigprocmask] = sys_rt_sigprocmask,  // 135
+    [SYS_rt_sigprocmask] = sys_rt_sigprocmask,  // 135
     //[SYS_rt_sigpending] = sys_rt_sigpending,    // 136
     //[SYS_rt_sigreturn] = sys_rt_sigreturn,      // 139
     //[SYS_setregid] = sys_setregid,              // 143
@@ -206,7 +205,7 @@ void * const syscalls[] = {
     //[SYS_geteuid] = sys_geteuid,                // 175
     //[SYS_getgid] = sys_getgid,                  // 176
     //[SYS_getegid] = sys_getegid,                // 177
-    //[SYS_gettid] = sys_gettid,                  // 178
+    [SYS_gettid] = sys_gettid,                  // 178
     //[SYS_sysinfo] = sys_sysinfo,                // 179
     //[SYS_socket] = sys_socket,                  // 198
     //[SYS_bind] = sys_bind,                      // 200
@@ -216,14 +215,14 @@ void * const syscalls[] = {
     //[SYS_sendto] = sys_sendto,                  // 206
     //[SYS_recvfrom] = sys_recvfrom,              // 207
     [SYS_brk] = (func)sys_brk,                  // 214
-    //[SYS_munmap] = sys_munmap,                  // 215
-    //[SYS_mremap] = (func)sys_mremap,            // 216
+    [SYS_munmap] = sys_munmap,                  // 215
+    [SYS_mremap] = (func)sys_mremap,            // 216
     [SYS_clone] = sys_clone,                    // 220
     [SYS_execve] = sys_execve,                  // 221
-    //[SYS_mmap] = (func)sys_mmap,                // 222
+    [SYS_mmap] = (func)sys_mmap,                // 222
     //[SYS_fadvise64] = sys_fadvise64,            // 223
-    //[SYS_mprotect] = sys_mprotect,              // 226
-    //[SYS_msync] = sys_msync,                    // 227
+    [SYS_mprotect] = sys_mprotect,              // 226
+    [SYS_msync] = sys_msync,                    // 227
     //[SYS_madvise] = sys_madvise,                // 233
     [SYS_wait4] = sys_wait4,                    // 260
     //[SYS_prlimit64] = sys_prlimit64,            // 261

@@ -22,18 +22,17 @@ static uint64_t timer_jiffies = 0;
 // 物理タイマーをタイマーとして使用する: すべてのコアで実行
 void timer_init(int core)
 {
+    initlock(&timerlock, "timer");
+
     arm_ptimer_init(INTERVAL);
     irq_register(IRQ_ARM_PTIMER, timer_intr, NULL);
     irq_enable(IRQ_ARM_PTIMER);
-
-    initlock(&timerlock, "timer");
 
     info("timer_init ok");
 }
 
 void timer_intr(void *param)
 {
-
     // pendingビットをクリア
     arm_ptimer_reset(INTERVAL);
     timer_tick();

@@ -45,25 +45,31 @@
  */
 
  /* ユーザメモリレイアウト.
- *  USER_TOP    -> ---------------------------   0x0800_0000     (128MB)
+ *  USER_TOP    -> ------------------------------   0x0001_0000_0000_0000
  *                        スタック (1MB)
  *
- *  USER_MAX_STACK -> ---------------------------   0x0500_0000　<- sp
+ *  USER_MAX_STACK -> ---------------------------   0x0000_FFFF_FFF0_0000　<- sp
  *                        ガードページ (4KB)
  *                    ---------------------------
+ *
+ *                        mmap領域 (64GB)
+ *  MMAP_BASE -> --------------------------------   0x0000_FFF0_0000_0000
+ *
+ *                        libc.so (4GB)
+ *  ELF_ET_DYN_BASE -> --------------------------   0x0000_FFEF_0000_0000
  *
  *                         ヒープ領域
  *                       ガードページ (4KB)
  *                    ---------------------------
  *                         コード領域
- *  USER_BASE -> ---------------------------    0x0000_0000
+ *  USER_BASE -> --------------------------------   0x40_0000
  */
 
 //#define STACKPAGE   1024
 //#define STACKTOP    USER_TOP                  /* スタックはUSER_TOPから */
-//#define STACKBASE   (STACKTOP - STACKPAGE * PGSIZE) /* スタックは16ページ */
-//#define MMAPBASE    0x0000FFDFFFFF0000        /* mmapアドレスの基底アドレス */
-//#define ELF_ET_DYN_BASE 0x0000FFDEFFFF0000    /* dynamic lib を置くアドレス */
+//#define STACKBASE   0x0000_FFFF_FFF0_0000     /* スタックは1MB (256ページ　*/
+#define MMAP_BASE       0x0000FFF000000000      /* mmapアドレスの基底アドレス */
+#define ELF_ET_DYN_BASE 0x0000FFEF00000000      /* dynamic lib を置くアドレス */
 //#define MMAPTOP     USER_TOP                  /* ARGV, ENVPなどはstack_topからmmapするため */
 
 

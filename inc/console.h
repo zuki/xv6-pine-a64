@@ -29,7 +29,7 @@ void console_init(void);
 void console_intr(void *_p);
 void cprintf1(const char *fmt, ...);
 void cprintf(const char *fmt, ...);
-void hexdump(const void *data, size_t size, const char *name);
+void hexdump(const void *data, size_t size, const char *name, bool desc);
 
 #define assert(x)                                                   \
 ({                                                                  \

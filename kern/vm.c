@@ -120,8 +120,8 @@ void *allocate_user_page_mm(struct mm_struct *mm, uint64_t va, uint64_t perm)
         error("no page");
         return 0;
     }
-    trace("call map_page");
-    trace("va: 0x%lx, page: 0x%lx, alloc: 1, perm: 0x%lx", va, page, perm);
+    trace("call map_page with va: 0x%lx, page: 0x%lx, alloc: 1, perm: 0x%lx", va, page, perm);
+    // vaをpageにマッピングする. mm->pgdがない場合はここで作成される
     if (map_page(mm, va, page, 1, perm)) {
         return P2V(page);       // 仮想アドレスを返す
     } else {
@@ -130,6 +130,7 @@ void *allocate_user_page_mm(struct mm_struct *mm, uint64_t va, uint64_t perm)
     }
 }
 
+// ページエントリを作成: 作成されたエントリのアドレスを返す
 static uint64_t *map_table_entry(uint64_t *pte, uint64_t va, uint64_t pa, uint64_t perm)
 {
     uint64_t index = va >> PAGE_SHIFT;
@@ -146,13 +147,17 @@ static uint64_t *map_table_entry(uint64_t *pte, uint64_t va, uint64_t pa, uint64
 static uint64_t map_table(uint64_t *table /*va*/, uint64_t shift, uint64_t va,
     int *alloc, uint64_t **pdesc)
 {
+    // 1. ページテーブル内のインデックスを計算
     uint64_t index = (va >> shift);
     index = index & (PTRS_PER_TABLE - 1);
     trace("va: 0x%lx, shift: %d, table[%d]: 0x%lx", va, shift, index, table[index]);
+    // 2. このvaに該当するページテーブルのアドレスを*pdescにセット
     if (pdesc) {
         *pdesc = table + index;
     }
+    // 3. 次レベルのページテーブルがない
     if (!table[index]) {
+        // 3.1 作成指示があれば作成してその物理アドレスを返す
         if (*alloc) {
             uint64_t next_level_table = get_free_page();    // pa
             if (!next_level_table) {
@@ -164,10 +169,12 @@ static uint64_t map_table(uint64_t *table /*va*/, uint64_t shift, uint64_t va,
             table[index] = entry;
             trace("table[%d]: 0x%lx, next_table: 0x%lx", index, table[index], next_level_table);
             return next_level_table;
+        // 3.2 作成指示がなければ0を返す
         } else {
             *alloc = 0;
             return 0;
         }
+    // 4. 次レベルのページテーブルが既存であればその物理アドレスを返す
     } else {
         *alloc = 0;
         trace("PTE: 0x%lx, pa: 0x%lx", table[index], PTE_TO_PA(table[index]));
@@ -175,23 +182,26 @@ static uint64_t map_table(uint64_t *table /*va*/, uint64_t shift, uint64_t va,
     }
 }
 
-//タスクのpgtableツリーをたどる. ユーザ仮想アドレスに対応するpteを探して（オプションで）更新する。
-// pteのカーネル仮想アドレスを返す
+//タスクのpgtableツリーをたどる. ユーザ仮想アドレスに対応するpteを探して（オプションで）
+// 更新する。pteのカーネル仮想アドレスを返す
+// permはPTEに追加セットするフラグ
 uint64_t *map_page(struct mm_struct *mm, uint64_t va /*uva*/, uint64_t page /*pa*/, int alloc, uint64_t perm)
 {
     uint64_t *desc;
     assert(mm);
-    trace("va: 0x%lx, page: 0x%lx, alloc: %d, perm: 0x%lx", va, page, alloc, perm);
     int nk = mm->kernel_pages_count;
     uint64_t *descs[4] = { 0 };
     uint64_t ker_pages[4] = { 0 };      // pa
+
+    if (alloc)
+        trace("va: 0x%lx, page: 0x%lx, nk: %d", va, page, nk);
 
     if (page != 0 && alloc == 1 && mm->user_pages_count >= MAX_TASK_USER_PAGES) {
         error("no more user pages: user_pages_count: %d", mm->user_pages_count);
         return 0;
     }
 
-    // タスクのトップレベルのpgtableから開始する。ない場合は割り当てる
+    // タスクのトップレベルのpgtableから開始する。ない場合は割り当てる（alloc_mm()後はmm-pgd = 0）
     if (!mm->pgd) {
         if (alloc) {
             if (nk == MAX_TASK_KER_PAGES)
@@ -211,25 +221,32 @@ uint64_t *map_page(struct mm_struct *mm, uint64_t va /*uva*/, uint64_t page /*pa
     uint64_t table = mm->pgd;       // pgd/pud/pmd/pteのpa
     int allocated;
 
+    // 各レベルのページテーブルを走査（必要ならテーブルを新規作成）
     for (int i = 1; i < 4; i++) {
         allocated = alloc;
         trace("before[%d] table: pa(0x%lx), va(0x%lx)", i, table, P2V(table));
         table = map_table(P2V(table), shifts[i], va, &allocated, &desc);
         trace("[%d] table: 0x%lx, allocated: %ld, desc: %p", i, table, allocated, desc);
+        // ページテーブルあり
         if (table) {
+            // このmap_tableでページテーブルを作成
             if (allocated) {
                 ker_pages[i] = table;
                 descs[i] = desc;
                 if (nk + i > MAX_TASK_KER_PAGES) {
-                    error("MAX_TASK_KER_PAGES %d reached", MAX_TASK_KER_PAGES);
+                    error("MAX_TASK_KER_PAGES %d (%d + %d) reached", MAX_TASK_KER_PAGES, nk, i);
                     goto fail;
                 }
+            // ページテーブルは既存
             } else {
                 // noop
             }
+        // ページテーブルなし
         } else {
+            // テーブル作成指示なし（走査エラー）
             if (!alloc) {
                 warn("%s: we reached nonexisting pgtable, and asked not to alloc", lvs[i]);
+            // テーブル作成に失敗（走査エラー）
             } else {
                 warn("%s: asked to alloc but still failed. low kernel mem?", lvs[i]);
             }
@@ -238,12 +255,15 @@ uint64_t *map_page(struct mm_struct *mm, uint64_t va /*uva*/, uint64_t page /*pa
         trace("[%d] kpage: 0x%lx, descs: %p (0x%lx)", i, ker_pages[i], descs[i], *descs[i]);
     }
 
+    // ページエントリを取得する
     uint64_t *pte_va = map_table_entry(P2V(table), va, page, perm);
     if (page) {
         assert(mm->user_pages_count < MAX_TASK_USER_PAGES);
         mm->user_pages_count++;
+        trace("user_pages_count: %d", mm->user_pages_count);
     }
 
+    // mm->kernel_pagesに4レベルのページテーブルのアドレスをセットする
     for (int i = 0; i < 4; i++) {
         if (ker_pages[i] == 0) continue;
         mm->kernel_pages[mm->kernel_pages_count++] = ker_pages[i];
@@ -262,16 +282,20 @@ fail:
     return 0;
 }
 
-// カレントタスクのユーザページをdstタスクにコピーする
+// カレントタスクのユーザページをdstタスクにコピーする :
+//   FIXME: ファイルはアドレス0からmappingされていると仮定されている
 int dup_current_virt_memory(struct mm_struct *dstmm)
 {
     struct trapframe *regs = task_pt_regs(myproc());
     struct mm_struct *srcmm = myproc()->mm;
     assert(srcmm);
 
+    trace("sz: 0x%lx", srcmm->sz);
+
     acquire(&srcmm->lock);
-    for (uint64_t i = 0; i < srcmm->sz; i += PAGE_SIZE) {
-        trace("call map_page");
+    // ユーザコードをコピーする
+    for (uint64_t i = USER_BASE; i < srcmm->sz; i += PAGE_SIZE) {
+        trace("call map_page with va: 0x%lx", i);
         uint64_t *pte = map_page(srcmm, i, 0, 0, 0);
         assert(pte);
         uint64_t perm = PTE_TO_PERM(*pte);
@@ -283,7 +307,7 @@ int dup_current_virt_memory(struct mm_struct *dstmm)
 
     // ユーザスタックをコピーする
     for (uint64_t i = PGROUNDDOWN(regs->sp); i < USER_TOP; i += PAGE_SIZE) {
-        trace("call map_page");
+        trace("call map_page with va: 0x%lx", i);
         uint64_t *pte = map_page(srcmm, i, 0, 0, 0);
         assert(pte);
         void *kernel_va = allocate_user_page_mm(dstmm, i, MM_AP_RW | MM_XN);
@@ -304,10 +328,16 @@ no_mem:
     return -1;
 }
 
-// 仮想アドレスの物理アドレスを返す
+uint64_t *walk(struct mm_struct *mm, uint64_t vap, int alloc)
+{
+    return map_page(mm, vap, 0, alloc, 0);
+}
+
+
+// 仮想アドレスの物理アドレスを返す: 対応するpaがない、おかしなpaの場合は0を返す
 uint64_t walkaddr(struct mm_struct *mm, uint64_t va)
 {
-    trace("va: 0x%lx", va);
+    trace("call map_page with va: 0x%lx", va);
     uint64_t *pte = map_page(mm, va, 0, 0, 0);
     if (!pte) return 0;
 
@@ -316,6 +346,7 @@ uint64_t walkaddr(struct mm_struct *mm, uint64_t va)
         return 0;
     }
     trace("va: 0x%lx, *pte: 0x%lx, pte_pa: 0x%lx", va, *pte, PTE_TO_PA(*pte));
+    // FIXME: pteの物理アドレスをUSER_BASE (0x400000)と比較しているが妥当か?
     assert(PTE_TO_PA(*pte) >= USER_BASE && PTE_TO_PA(*pte) < USER_TOP);
     trace("va: 0x%lx, pa: 0x%lx", va, PTE_TO_PA(*pte));
     return PTE_TO_PA(*pte);
@@ -458,12 +489,14 @@ void free_task_pages(struct mm_struct *mm, int useronly)
     uint64_t page, sz;
     assert(mm);
 
-    sz = mm->sz;
+    // ユーザページを解放する
+    sz = mm->sz - USER_BASE;
     if (growproc(mm, -sz) == (uint64_t)(void *)-1){
         error("faild free user pages");
         return ;
     }
 
+    // カーネルページ（ページテーブルで使用）を解放
     if (!useronly) {
         for (int i = 0; i < mm->kernel_pages_count; i++) {
             page = mm->kernel_pages[i];
@@ -474,10 +507,11 @@ void free_task_pages(struct mm_struct *mm, int useronly)
         mm->kernel_pages_count = 0;
         mm->pgd = 0;
     }
+    trace("ok");
 }
 
-// ユーザページをアンマップして解放する
-static int free_user_page_range(struct mm_struct *mm, uint64_t start_va, uint64_t size)
+// ユーザページをアンマップして解放する : start_vaはページアラインしていること
+static int free_user_page_range(struct mm_struct *mm, uint64_t start_va, uint64_t size, int do_free)
 {
     uint64_t *pte;
     uint64_t page;      // pa
@@ -487,28 +521,53 @@ static int free_user_page_range(struct mm_struct *mm, uint64_t start_va, uint64_
     assert(!(start_va & (~PAGE_MASK)) && !(size & (~PAGE_MASK)) && mm);
 
     for (uint64_t i = start_va; i < start_va + size; i += PAGE_SIZE, cnt++) {
-        trace("call map_page");
+        trace("call map_page with va: 0x%lx", i);
         pte = map_page (mm, i, 0, 0, 0);
         if (!pte) {
             error("map_page failed: i: 0x%lx, cnt: %d", i, cnt);
             return -1;
         }
-        page = PTE_TO_PA(*pte);
-        kfree((char *)P2V(page));
-        assert(mm->user_pages_count > 0);
-        mm->user_pages_count--;
+        if (do_free) {
+            page = PTE_TO_PA(*pte);
+            trace("page: pa=0x%lx, va=0x%lx, upcount: %d", page, P2V(page), mm->user_pages_count);
+            kfree((char *)P2V(page));
+            assert(mm->user_pages_count > 0);
+            --mm->user_pages_count;
+        }
         *pte = 0;
     }
+    trace("va: 0x%lx, size: 0x%lx ok", start_va, size);
     return cnt;
 }
 
-// szを増減する
+void uvm_unmap(struct mm_struct *mm, uintptr_t va, uint64_t npages, int do_free)
+{
+    free_user_page_range(mm, va, npages * PGSIZE, do_free);
+}
+
+int uvm_map(struct mm_struct *mm, uintptr_t va, size_t sz, uintptr_t pa)
+{
+    uintptr_t v = ROUNDDOWN(va, PGSIZE), end = va + sz;
+    assert(pa < USER_TOP);
+    pa = ROUNDDOWN(pa, PGSIZE);
+    for (; v < end; pa += PGSIZE, v += PGSIZE) {
+        uint64_t *pte = map_page(mm, v, pa, 1, MM_AP_RW);
+        if (!pte) {
+            error("walk failed: 0x%lx", v);
+            return -1;
+        }
+        trace("v: 0x%lx, *pte: 0x%lx, user_pages_count: %d", v, *pte, mm->user_pages_count);
+    }
+    return 0;
+}
+
+// szを増減する: 増減する前のサイズを返す
 uint64_t growproc(struct mm_struct *mm, int incr)
 {
     uint64_t sz = mm->sz, sz1;
     void *kva;
     int ret;
-    trace("sz: 0x%lx, incr: 0x%x", sz, incr);
+    trace("sz: 0x%lx, incr: %d", sz, incr);
 
     if (incr < 0 && sz < -incr) {
         error("incr too small: sz 0x%lx (%ld) incr %d. requested new brk 0x%lx",
@@ -531,8 +590,9 @@ uint64_t growproc(struct mm_struct *mm, int incr)
             }
         }
     } else {
+        trace("free range: 0x%lx - 0x%lx", PGROUNDUP(sz + incr), PGROUNDDOWN(sz) - PGROUNDUP(sz + incr));
         int ret = free_user_page_range(mm, PGROUNDUP(sz + incr),
-                    PGROUNDDOWN(sz) - PGROUNDUP(sz + incr));
+                    PGROUNDDOWN(sz) - PGROUNDUP(sz + incr), 1);
         assert(ret != -1);
     }
     sz1 = mm->sz;
@@ -540,10 +600,12 @@ uint64_t growproc(struct mm_struct *mm, int incr)
     if (myproc()->mm == mm)
         set_pgd(mm->pgd);
 
+    trace("incr: %d, sz: 0x%lx ok", incr, mm->sz);
+
     return sz1;
 
 reverse:
-    ret = free_user_page_range(mm, PGROUNDUP(sz),sz1 - PGROUNDUP(sz));
+    ret = free_user_page_range(mm, PGROUNDUP(sz), sz1 - PGROUNDUP(sz), 1);
     assert(ret != -1);
 bad:
     return (uint64_t)(void *)-1;
@@ -555,7 +617,7 @@ int do_mem_abort(uint64_t addr, uint64_t esr, uint64_t elr)
     struct task_struct *p = myproc();
     __attribute__((unused)) struct trapframe *regs = task_pt_regs(p);
     uint64_t dfs = (esr & 0b111111);
-    debug("addr: 0x%lx, dfs: 0x%lx", addr, dfs);
+    trace("addr: 0x%lx, dfs: 0x%lx", addr, dfs);
     if (addr > USER_TOP) {
         error("bad user va? faulty addr 0x%lx > USER_TOP 0x%x\n"
               "esr 0x%lx, elr 0x%lx", addr,USER_TOP, esr, elr);
@@ -568,7 +630,7 @@ int do_mem_abort(uint64_t addr, uint64_t esr, uint64_t elr)
             goto bad;
         }
         acquire(&p->mm->lock);
-        trace("call map_page");
+        trace("call map_page with va: 0x%lx", addr & PAGE_MASK);
         map_page(p->mm, addr & PAGE_MASK, page, 1, MMU_PTE_FLAGS | MM_AP_RW);
         release(&p->mm->lock);
         ind++;
@@ -577,7 +639,7 @@ int do_mem_abort(uint64_t addr, uint64_t esr, uint64_t elr)
                     addr, myproc()->pid, ind);
             goto bad;
         }
-        debug("demand paging at user va 0x%lx, elr 0x%lx ok", addr, regs->pc);
+        trace("demand paging at user va 0x%lx, elr 0x%lx ok", addr, regs->pc);
         ind = 0;
         return 0;
     }

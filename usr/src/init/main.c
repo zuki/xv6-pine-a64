@@ -15,7 +15,7 @@ main()
     int pid, wpid;
 
     if (open("/dev/console", O_RDWR) < 0) {
-        mknod("/dev/console", S_IFCHR, 0x0100);
+        mknod("/dev/console", S_IFCHR|0666, 0x0100);
         open("/dev/console", O_RDWR);
     }
     dup(0);                     // stdout

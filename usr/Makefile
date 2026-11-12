@@ -28,7 +28,7 @@ all:
 $(OBJ)/%.c.o: %.c $(LIBC_DEPS)
 	mkdir -p $(dir $@)
 	$(USR_CC) $(CFLAGS) -c -o $@ $<
-	
+
 # Same as `bin/NAME: $(OBJ)/NAME/*.c.o $(LIBC_A)`
 # NOTE: Static library should be at last.
 .SECONDEXPANSION:

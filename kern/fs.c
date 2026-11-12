@@ -18,6 +18,7 @@
 #include <buf.h>
 #include <file.h>
 //#include <sd.h>
+#include <clock.h>
 #include <vm.h>
 #include <console.h>
 #include <linux/time.h>
@@ -213,11 +214,9 @@ struct inode* ialloc(uint32_t dev, short type)
             bwrite(bp);
             brelse(bp);
             struct inode *ip = iget(dev, inum);
-#if 0
             struct timespec tp;
-            clock_gettime(0, CLOCK_REALTIME, &tp);
+            clock_gettime(CLOCK_REALTIME, (uintptr_t)&tp, 0);
             ip->atime = ip->ctime = ip->mtime = tp;
-#endif
             return ip;
         }
         brelse(bp);
@@ -245,10 +244,11 @@ void iupdate(struct inode *ip)
 #if 0
     dip->uid   = ip->uid;
     dip->gid   = ip->gid;
+#endif
     dip->atime = ip->atime;
     dip->mtime = ip->mtime;
     dip->ctime = ip->ctime;
-#endif
+
     memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
     bwrite(bp);
     brelse(bp);
@@ -324,10 +324,11 @@ void ilock(struct inode *ip)
 #if 0
         ip->uid   = dip->uid;
         ip->gid   = dip->gid;
+#endif
         ip->atime = dip->atime;
         ip->mtime = dip->mtime;
         ip->ctime = dip->ctime;
-#endif
+
         memmove(ip->addrs, dip->addrs, sizeof(ip->addrs));
         brelse(bp);
         ip->valid = 1;
@@ -530,26 +531,25 @@ void itrunc(struct inode *ip)
 // Copy stat information from inode.
 // Caller must hold ip->lock.
 
-void stati(struct inode *ip, struct stat *st)
+int stati(struct inode *ip, uint64_t stp)
 {
-    // FIXME: Support other fields in stat.
-    st->st_dev     = ip->dev;
-    st->st_ino     = ip->inum;
-    st->st_nlink   = ip->nlink;
-    st->st_size    = ip->size;
-    st->st_blksize = 1024;
-    st->st_blocks  = (ip->size / st->st_blksize) + 1;
-#if 0
-    st->st_uid     = ip->uid;
-    st->st_gid     = ip->gid;
-    st->st_atime   = ip->atime;
-    st->st_mtime   = ip->mtime;
-    st->st_ctime   = ip->ctime;
-#endif
-    if (ip->type == T_DEVICE)
-        st->st_rdev = ip->devno;
+    struct stat st;
 
-    st->st_mode = ip->mode;
+    // FIXME: support other field in stat
+    st.st_dev = ip->dev;
+    st.st_ino = ip->inum;
+    st.st_nlink = ip->nlink;
+    st.st_size = ip->size;
+    st.st_blksize = 1024;
+    st.st_blocks  = (ip->size / st.st_blksize) + 1;
+    memmove(&st.st_atime, &ip->atime, sizeof(struct timespec));
+    memmove(&st.st_mtime, &ip->mtime, sizeof(struct timespec));
+    memmove(&st.st_ctime, &ip->ctime, sizeof(struct timespec));
+
+    if (ip->type == T_DEVICE)
+        st.st_rdev = ip->devno;
+    st.st_mode = ip->mode;
+    return copyout(myproc()->mm, stp, (char *)&st, sizeof(struct stat));
 }
 
 // inodeからデータを読み込む.
@@ -775,6 +775,8 @@ static struct inode *namex(char *path, int nameiparent, char *name, int dirfd)
     else
         ip = idup(myproc()->ofile[dirfd]->ip);
 
+    trace("path: %s, ip: %d",path, ip->inum);
+
     while ((path = skipelem(path, name)) != 0) {
         ilock(ip);
         if (ip->type != T_DIR){
@@ -797,6 +799,7 @@ static struct inode *namex(char *path, int nameiparent, char *name, int dirfd)
         iput(ip);
         return 0;
     }
+
     return ip;
 }
 
@@ -902,7 +905,7 @@ int getdents64(struct file *f, uint64_t data, size_t size)
     trace("ip: %d, data: 0x%lx, size: %ld", f->ip->inum, data, size);
 
     while (1) {
-        n = fileread(f, (uint64_t)&de, sizeof(struct dirent));
+        n = fileread(f, (uint64_t)&de, sizeof(struct dirent), 0);
         //trace("n: %kd, de: de.inum: %d, name: %s", n, de.inum, de.name);
 
         if (n == 0) {

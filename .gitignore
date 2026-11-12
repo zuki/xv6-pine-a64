@@ -43,3 +43,8 @@ docs/book
 inc/sunxi/
 *.org
 kern/mmc_save
+
+usr/initcode/initcode.S.1
+usr/initcode/initcode.S.2
+user_init/initcode.inc
+

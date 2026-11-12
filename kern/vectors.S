@@ -8,7 +8,7 @@
 #include <irq.h>
 
 // ハンドラのない割り込みのエラーハンドラ
-.macro handle_invalid_entry el, type
+.macro handle_invalid_entry el, type, scno=xzr
     // カーネルはいずれにしてもハングアップしてしまうので
     // カーネルスタックを使うことにする
     mrs   x27, sctlr_el1        // x27/x28には重要なデータはないと仮定
@@ -34,6 +34,7 @@
     mrs   x1, esr_el1
     mrs   x2, elr_el1
     mrs   x3, far_el1
+    mov   x4, \scno
     bl    show_invalid_entry_message      // エラー表示: irq.c
     msr   daifset, #0b0010              // 割り込みを無効にする
     b     err_hang
@@ -50,8 +51,8 @@
       例外が発生したELを示す引数 `el` を受け取る。
   */
 .macro    kernel_entry, el
-    sub    sp, sp, #S_FRAME_SIZE   // = 288 = 8 * 36 (x0-x30, sp, elr_el1, spsr_el1,
-    stp    x0, x1, [sp, #16 * 0]   //             fp, lr)
+    sub    sp, sp, #S_FRAME_SIZE   // = 320 = 8 * 38 (x0-x30, sp, elr_el1, spsr_el1,
+    stp    x0, x1, [sp, #16 * 0]   //     tpidr, padding, fp, lr) + 16 (q0)
     stp    x2, x3, [sp, #16 * 1]
     stp    x4, x5, [sp, #16 * 2]
     stp    x6, x7, [sp, #16 * 3]
@@ -84,9 +85,12 @@
     mrs    x22, elr_el1
     mrs    x23, spsr_el1
     /* above: save reg0--29.
-          below: save reg30, sp, pc(as elr_el1), pstate */
+          below: save reg30, sp, pc(as elr_el1), pstate, q0 */
     stp    x30, x21, [sp, #16 * 15]
     stp    x22, x23, [sp, #16 * 16]
+    mrs    x22, tpidr_el0
+    stp    x22, xzr, [sp, #16 * 17]
+    str    q0,       [sp, #16 * 18]
 
     /*
      * EL0からの例外については最終フレームレコードを作成する。
@@ -103,6 +107,9 @@
     .endm
 
     .macro    kernel_exit, el
+    ldr    q0,       [sp, #16 * 18]
+    ldp    x22, xzr, [sp, #16 * 17]
+    msr    tpidr_el0, x22
     ldp    x22, x23, [sp, #16 * 16]
     ldp    x30, x21, [sp, #16 * 15]
 
@@ -237,12 +244,14 @@ el0_svc:
     bl    enable_irq                    // 割り込みを有効にする
     cmp   scno, sc_nr                   // syscall number >= syscall番号の上限?
     b.hs  ni_sys                        // そうなら、エラーとして処理する
-
     ldr   x16, [stbl, scno, lsl #3]     // syscallテーブルから処理関数のアドレスを取得
+    cbz   x16, undef_sys
     blr   x16                           // sys_* 処理関数を呼び出す（引数はそのままx0-x7にある）
     b     ret_from_syscall              // return処理関数へジャンプ
 ni_sys:
     handle_invalid_entry 0, SYSCALL_ERROR
+undef_sys:
+    handle_invalid_entry 0, UNDEFUN_SYSCALL, x26
 ret_from_syscall:
     // --- kill済みのタスクの処理 ---
     // if (current->killed)

@@ -108,7 +108,7 @@ int             namecmp(const char*, const char*);
 struct inode*   namei(char *path, int dirfd);
 struct inode*   nameiparent(char *path, char *name, int dirfd);
 int             readi(struct inode *ip, int user_dst, uint64_t dst, uint32_t off, uint32_t n);
-void            stati(struct inode*, struct stat*);
+int             stati(struct inode *ip, uint64_t stp);
 int             writei(struct inode *ip, int user_src, uint64_t src, uint32_t off, uint32_t n);
 void            itrunc(struct inode*);
 int             iunlink(struct inode *dp, struct inode *ip, int flags);

@@ -73,9 +73,9 @@
 #define GICC_IAR_CPUID__MASK        (3 << 10)
 
 #define GICC_EOIR               (GICC_BASE + 0x010)     // End of Interrupt Register
-#define     GICC_EOIR_EOIINTID__MASK    0x3FF
-#define     GICC_EOIR_CPUID__SHIFT      10
-#define     GICC_EOIR_CPUID__MASK       (3 << 10)
+#define     GICC_EOIINTID__MASK    0x3FF
+#define     GICC_CPUID__SHIFT      10
+#define     GICC_CPUID__MASK       (3 << 10)
 
 /* 割り込み番号 */
 #define GIC_IRQ_SGI         0
@@ -137,6 +137,14 @@ void irq_register(int i, void (*f)(void *), void *param);
 void irq_handler(void/* int user_mode */);
 void irq_error(uint64_t type);
 void irq_send_sgi_to_me(uint32_t irqno);
+
+static inline void set_gicd_itarget(int id, unsigned char target)
+{
+    uint64_t addr = GICD_ITARGETSRn + 4 * (id / 4);
+    uint32_t val = get32(addr);
+    int pos = 8 * (id % 4);
+    put32(addr, (val & ~(0xff << pos)) | (target << pos));
+}
 
 #endif
 

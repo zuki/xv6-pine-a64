@@ -1,13 +1,14 @@
 #include <types.h>
+#include <param.h>
 #include <sched.h>
 #include <console.h>
 #include <vm.h>
 #include <syscall.h>
-//#include <filedesc.h>
-//#include <mmap.h>
+#include <mmap.h>
 #include <fs.h>
+#include <file.h>
 #include <string.h>
-//#include <linux/mman.h>
+#include <linux/mman.h>
 #include <linux/errno.h>
 //#include <linux/signal.h>
 //#include <linux/ppoll.h>
@@ -24,74 +25,42 @@ int sys_yield(void)
 }
 #endif
 
-// int brk(const void *addr);
-size_t sys_brk(uint64_t addr/* uva */)
+// man 2 brk, sbrkとは異なる定義
+size_t sys_brk(uint64_t newsz)
 {
     struct mm_struct *mm = myproc()->mm;
-    size_t sz;
-    struct trapframe *regs = task_pt_regs(myproc());
-    uint64_t newsz;
-    int error;
+    size_t sz1, sz2;
 
     acquire(&mm->lock);
-    sz = mm->sz;
+    sz1 = mm->sz;
 
-    if ((error = argptr(addr, (char *)&newsz, sizeof(uint64_t))) < 0) {
-        release(&mm->lock);
-        return error;
-    }
     if (newsz == 0) {
         release(&mm->lock);
-        return sz;
+        return sz1;
     }
-    int incr = newsz - sz;
-
-    if (incr < 0 && sz + incr < mm->codesz) {
-        error("requested brk too small. into code/data region");
-        goto bad;
-    }
-
-    if (incr > 0 && regs->sp && sz + incr > regs->sp - PAGE_SIZE) {
-        error("requested brk %lx too large. too close to sp %lx",
-            sz+incr, regs->sp);
-        goto bad;
-    }
-
-    sz = growproc(mm, incr);
+    int incr = newsz - sz1;
+    trace("name: %s, sz: 0x%lx, newsz: 0x%lx, incr: 0x%x", myproc()->name, sz1, newsz, incr);
+    sz1 = growproc(mm, incr);
+    sz2 = mm->sz;
     release(&mm->lock);
-    return sz;
-
-bad:
-    release(&mm->lock);
-    return -1;
+    trace("ret: 0x%lx", sz2);
+    return sz2;
 }
 
-#if 0
 // void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
-void *sys_mmap(void)
+void *sys_mmap(uintptr_t addrp, size_t length, int prot, int flags, int fd, off_t offset)
 {
-    uint64_t addr;
-    size_t length, offset;
-    int prot, flags, fd;
-    struct vfile *f;
+    struct file *f;
 
-    if (argu64(0, &addr) < 0 ||
-        argu64(1, &length) < 0 ||
-        argint(2, &prot) < 0 ||
-        argint(3, &flags) < 0 ||
-        argint(4, &fd) < 0 ||
-        argu64(5, &offset) < 0)
-        return (void *)-EINVAL;
-
-    trace("addr: 0x%llx, length: 0x%x, prot: 0x%x, flags: 0x%x, fd: %d, offset: 0x%x",
-        addr, length, prot, flags, fd, offset);
+    trace("addr: 0x%lx, length: 0x%x, prot: 0x%x, flags: 0x%x, fd: %d, offset: 0x%x",
+        addrp, length, prot, flags, fd, offset);
 
     if (flags & MAP_ANONYMOUS) {
         if (fd != -1) return (void *)-EINVAL;
         f = NULL;
     } else {
-        if (fd < 0 || fd >= OPEN_MAX) return (void *)-EBADF;
-        if ((f = get_fd(myproc()->fd_table, fd)) == NULL) return (void *)-EBADF;
+        if (fd < 0 || fd >= NOFILE) return (void *)-EBADF;
+        f = myproc()->ofile[fd];
     }
 
     if ((flags & (MAP_PRIVATE | MAP_SHARED)) == 0) {
@@ -100,101 +69,79 @@ void *sys_mmap(void)
     }
 
     if ((ssize_t)length <= 0 || (ssize_t)offset < 0) {
-        warn("invalid length: %lld or offset: %lld", length, offset);
+        error("invalid length: %lld or offset: %lld", length, offset);
         return (void *)-EINVAL;
     }
 
     // MAP_FIXEDの場合、addrが指定されていなければならない
-    if ((flags & MAP_FIXED) && addr == 0) {
-        warn("MAP_FIXED and addr is NULL");
+    if ((flags & MAP_FIXED) && addrp == 0) {
+        error("MAP_FIXED and addr is NULL");
         return (void *)-EINVAL;
     }
 
     // バックにあるファイルはreadableでなければならない
-    if (!(flags & MAP_ANONYMOUS) && !FILE_READABLE(f)) {
+    if (!(flags & MAP_ANONYMOUS) && !f->readable) {
         warn("file is not readable");
         return (void *)-EACCES;
     }
 
     // MAP_SHAREかつPROT_WRITEの場合はバックにあるファイルがwritableでなければならない
     if (!(flags & MAP_ANONYMOUS) && (flags & MAP_SHARED)
-     && (prot & PROT_WRITE) && !FILE_WRITABLE(f)) {
+     && (prot & PROT_WRITE) && !f->writable) {
         warn("file is not writable");
         return (void *)-EACCES;
     }
 
     trace("addr: 0x%llx, length: 0x%x, prot: 0x%x, flags: 0x%x, f: %d, offset: 0x%x",
         addr, length, prot, flags, f ? f->vnode->ino : -1, offset);
-    return mmap((void *)addr, length, prot, flags, f, offset);
+    return mmap(addrp, length, prot, flags, f, offset);
 }
 
 // int munmap(void *addr, size_t length);
-int sys_munmap(void)
+int sys_munmap(uintptr_t addrp, size_t length)
 {
-    uint64_t addr;
-    size_t length;
-
-    if (argu64(0, &addr) < 0 || argu64(1, &length) < 0)
-        return -EINVAL;
-
     trace("addr: 0x%llx, length: 0x%llx", addr, length);
-
-    return munmap((void *)addr, length);
+    return munmap(addrp, length);
 }
 
 // void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, void *new_address);
-void *sys_mremap(void)
+void *sys_mremap(uintptr_t addr, size_t old_size, size_t new_size, int flags, uintptr_t new_addr)
 {
-    uint64_t old_addr, new_addr;
-    size_t old_size, new_size;
-    int flags;
-
-    if (argu64(0, &old_addr) < 0 || argu64(1, &old_size) < 0
-     || argu64(2, &new_size) < 0 || argint(3, &flags) < 0
-     || argu64(4, &new_addr) < 0)
-        return (void *)-EINVAL;
-
-    return mremap((void *)old_addr, old_size, new_size, flags, (void *)new_addr);
+    return mremap(addr, old_size, new_size, flags, new_addr);
 }
 
 // int mprotect(void *addr, size_t len, int prot);
-int sys_mprotect(void)
+int sys_mprotect(uintptr_t addr, size_t length, int prot)
 {
-    uint64_t addr;
-    size_t length;
-    int prot;
-
-    if (argu64(0, &addr) < 0 || argu64(1, &length) < 0
-     || argint(2, &prot) < 0)
-        return -EINVAL;
-
-    return mprotect((void *)addr, length, prot);
+    return mprotect(addr, length, prot);
 }
 
 // int msync(void *addr, size_t length, int flags);
-int sys_msync(void)
+int sys_msync(uintptr_t addr, size_t length, int flags)
 {
-    uint64_t addr;
-    size_t length;
-    int flags;
-
-    if (argu64(0, &addr) < 0 || argu64(1, &length) < 0
-     || argint(2, &flags) < 0)
-        return -EINVAL;
-
-    return msync((void *)addr, length, flags);
+    return msync(addr, length, flags);
 }
-#endif
 
 // syscall(SYS_clone, flags, stack, ptid, tls, ctid)
 int sys_clone(uint64_t flags, uint64_t stack, uint64_t ptid, uint64_t tls, uint64_t ctid)
 {
+    int pid;
+    trace("flags: 0x%lx, stack: 0x%lx", flags, stack);
+    struct task_struct *p = myproc();
+    trace("pid: %d, mm: %p, mm->vmas: %p", p->pid, p->mm, p->mm->vmas);
+
     // ユーザスレッド
-    if (flags & (CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_THREAD))
-        return copy_process(PF_UTHREAD, 0, stack, 0);
+    if (flags & (CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_THREAD)) {
+        trace("clone user thread");
+        pid = copy_process(PF_UTHREAD, 0, stack, 0);
     // ユーザプロセス
-    else
-        return copy_process(0, 0, stack, 0);
+    } else {
+        trace("clone user process")
+        pid = copy_process(0, 0, stack, 0);
+    }
+    trace("pid: %d", pid);
+
+    return pid;
 }
 
 // FIXME: exit_group should kill every thread in the current thread group.
@@ -207,7 +154,7 @@ int sys_exit_group(int status) {
 
 // void exit(int status)
 int sys_exit(int status) {
-    debug("[%d] exit '%s' with code %d", myproc()->pid, myproc()->name, status);
+    trace("[%d] exit '%s' with code %d", myproc()->pid, myproc()->name, status);
     exit_process(status);
     return 0;
 }
@@ -215,22 +162,19 @@ int sys_exit(int status) {
 // pid_t wait4(pid_t pid, int *status, int options, struct rusage *rusage);
 int sys_wait4(int pid, uint64_t statusp/* uva */, int options, uint64_t rusagep/*uva*/)
 {
-    struct rusage rusage;
-    int status;
-    int error;
+    int ret;
 
-    debug("[%d] pid: %d, statusp: 0x%lx, options: 0x%x, rusagep: 0x%lx", pid, statusp, options, rusagep);
-
-    if ((error = argptr(statusp, (char *)&status, sizeof(int))) < 0)
-        return error;
-    if ((error = argptr(rusagep, (char *)&rusage, sizeof(rusage))) < 0)
-        return error;
+    trace("[%d] pid: %d, statusp: 0x%lx, options: 0x%x, rusagep: 0x%lx", pid, statusp, options, rusagep);
 
     if (options) {
         error("options are not supported");
         return -EINVAL;
     }
-    return wait4(pid, &status, options, &rusage);
+
+    // FIXME: rusageの処理
+    ret = wait4(pid, statusp, options, 0);
+    trace("pid: %d", ret);
+    return ret;
 }
 
 #if 0
@@ -365,6 +309,7 @@ int sys_set_tid_address(void) {
 int sys_getpid(void) {
     return myproc()->pid;
 }
+#endif
 
 /* 呼び出し元のスレッド ID (TID) を取得する */
 // pid_t gettid(void);
@@ -373,6 +318,7 @@ int sys_gettid(void) {
     return myproc()->pid;
 }
 
+#if 0
 /* pid によって識別されるプロセスのプロセスグループを取得する */
 // pid_t getpgid(pid_t pid);
 int sys_getpgid(void)

@@ -76,7 +76,7 @@ static int dupfd(int fd, int from)
 /* int dup(int oldfd); */
 int sys_dup(int fd)
 {
-    debug("fd: %d", fd);
+    trace("fd: %d", fd);
     return dupfd(fd, 0);
 }
 
@@ -105,14 +105,14 @@ int sys_dup3(int fd1, int fd2, int flags)
 }
 
 /* ssize_t read(int fd, void *buf, size_t count); */
-ssize_t sys_read(int fd, uint64_t p /* user va */, size_t count)
+ssize_t sys_read(int fd, uint64_t bufp /* user va */, size_t count)
 {
     struct file *f;
     int error;
 
     if ((error = argfd(fd, &f)) < 0)
         return error;
-    return fileread(f, p, count);
+    return fileread(f, bufp, count, 1);
 }
 
 /*  ssize_t write(int fd, const void *buf, size_t count);  */
@@ -123,7 +123,7 @@ ssize_t sys_write(int fd, uint64_t p /* user va */, size_t count)
 
     if ((error = argfd(fd, &f)) < 0)
         return error;
-    return filewrite(f, p, count);
+    return filewrite(f, p, count, 1);
 }
 
 struct iovec {
@@ -147,7 +147,7 @@ ssize_t sys_readv(int fd, uint64_t iovp, int iovcnt)
     for (int i = 0; i < iovcnt; i++) {
         if (copyin(mm, (char *)&iov, iovp, sizeof(struct iovec)) < 0)
             return -EIO;
-        bytes = fileread(f, (uint64_t)iov.iov_base, iov.iov_len);
+        bytes = fileread(f, (uint64_t)iov.iov_base, iov.iov_len, 0);
         if (bytes < 0) {
             error("bytes: %lld", bytes);
             return bytes;
@@ -175,7 +175,7 @@ ssize_t sys_writev(int fd, uint64_t iovp, int iovcnt)
     for (int i = 0; i < iovcnt; i++) {
         if (copyin(mm, (char *)&iov, iovp, sizeof(struct iovec)) < 0)
             return -EIO;
-        tot += filewrite(f, (uint64_t)iov.iov_base, iov.iov_len);
+        tot += filewrite(f, (uint64_t)iov.iov_base, iov.iov_len, 0);
         iovp += sizeof(iov);
     }
     return tot;
@@ -201,8 +201,9 @@ int sys_close(int fd)
     if ((error = argfd(fd, &f)) < 0) {
         return error;
     }
+    trace("fd: %d, f: %p", fd, f);
+    if (f) fileclose(f);
     myproc()->ofile[fd] = 0;
-    fileclose(f);
     return 0;
 }
 
@@ -218,29 +219,19 @@ int sys_fstat(int fd, uint64_t st /* user va */)
     return filestat(f, st);
 }
 
-#if 0
 /* int fstatat(int dirfd, const char *pathname, struct stat *buf, int flags); */
-int  sys_fstatat(void)
+int sys_fstatat(int dirfd, uint64_t pathp, uint64_t statp, int flags)
 {
-    int dirfd, flags;
-    char *path;
-    char linkpath[512];
-    struct stat *st, sst;
-    struct vnode *vnode, *cwd = NULL;
-    long error;
-    memset(linkpath, 0, 512);
+    char path[MAXPATH];
+    struct inode *ip;
+    int error;
 
-    if ((error = argint(0, &dirfd)) < 0)
-        return error;
-    if ((error = argstr(1, &path)) < 0)
-        return error;
-    if ((error = argptr(2, (void *)&st, sizeof(*st))) < 0)
-        return error;
-    if ((error = argint(3, &flags)) < 0)
+    if ((error = argstr(pathp, path, MAXPATH)) < 0)
         return error;
     trace("dirfd: %d, path: %s, flags: 0x%x", dirfd, path, flags);
 
-#ifdef CONFIG_FAT
+//#ifdef CONFIG_FAT
+#if 0
     if (is_fatfs(path)) {
         trace("cal fat_stat: %s", path);
         return fat_stat(path, st);
@@ -252,63 +243,17 @@ int  sys_fstatat(void)
         return -EINVAL;
     }
 
-    if ((error = check_fdcwd(path, dirfd, &cwd)) < 0) {
-        error("failed check_fdcwd: path: %s, dirfd: %d", path, dirfd);
-        return error;
+    if ((ip = namei(path, dirfd)) == 0) {
+        error("%s is not found", path);
+        return -EBADF;
     }
 
-    trace("lookup cwd: %d, path: %s", cwd->ino, path);
-    if ((error = vfs_lookup(cwd, path, VLOOKUP_NORMAL, myproc()->uid, &vnode)) < 0) {
-        error("vfs_lookup error: cwd: %d, path: %s", cwd->ino, path);
-        return error;
-    }
+    ilock(ip);
+    error = stati(ip, statp);
+    iunlockput(ip);
 
-    trace("(1) path: %s, vnode: %d", path, vnode->ino);
-
-    if (S_ISLNK(vnode->mode) && !(flags & AT_SYMLINK_NOFOLLOW)) {
-        const char *name = path_last_component((const char *)path);
-        if ((error = vfs_readlink(cwd, name, linkpath, 512, myproc()->uid)) < 0) {
-            error("readlink: vnode: %d, name: %s", vnode->ino, name);
-            vfs_release_vnode(cwd);
-            return error;
-        }
-        linkpath[strlen(linkpath)] = '\0';
-        trace("name: %s, linkpath: %s", name, linkpath);
-        flags &= ~AT_SYMLINK_NOFOLLOW;
-        vfs_release_vnode(vnode);
-        if ((error = vfs_lookup(cwd, linkpath, VLOOKUP_NORMAL, myproc()->uid, &vnode)) < 0) {
-            error("vfs_lookup error (%d): vnode: %d, linkpath: %s", error, vnode->ino, linkpath);
-            vfs_release_vnode(cwd);
-            return error;
-        }
-        trace("(2) linkvnode: %d", vnode->ino);
-    }
-
-    trace("(3) vnode: %d", vnode->ino);
-    //sst.st_dev = vnode->mp->dev;
-    sst.st_ino = vnode->ino;
-    sst.st_mode = vnode->mode;
-    sst.st_nlink = vnode->nlink;
-    sst.st_uid = vnode->uid;
-    sst.st_gid = vnode->gid;
-    sst.st_rdev = vnode->rdev;
-    sst.st_size = vnode->size;
-    enum fsname fsname = get_fsname(vnode);
-    if (fsname == FSV6)
-        sst.st_dev = ((struct v6_inode *)vnode->data)->type;
-    else
-        sst.st_dev = T_UNKNOWN;
-    memmove(&sst.st_atime, &vnode->atime, sizeof(struct timespec));
-    memmove(&sst.st_mtime, &vnode->mtime, sizeof(struct timespec));
-    memmove(&sst.st_ctime, &vnode->ctime, sizeof(struct timespec));
-    memmove(st, &sst, sizeof(struct stat));
-    trace("st_dev: %d", sst.st_dev);
-    vfs_release_vnode(vnode);
-
-    trace("dirfd: %d, path: %s, ino: %d", dirfd, path, sst.st_ino);
-    return 0;
+    return error;
 }
-#endif
 
 /* int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags);  */
 int  sys_linkat(int olddirfd, uint64_t opathp /* user va*/,
@@ -463,7 +408,7 @@ int sys_openat(int dirfd, uint64_t pathp/* user va*/, int flags, mode_t mode)
     if ((error = check_fdcwd(path, dirfd)) < 0)
         return error;
 
-    debug("path: %s, flags: 0x%x, mode: 0x%lx", path, flags, mode);
+    trace("path: %s, flags: 0x%x, mode: 0x%lx", path, flags, mode);
     return fileopen(path, dirfd, flags, mode);
 }
 
@@ -489,7 +434,7 @@ int sys_mkdirat(int dirfd, uint64_t pathp/* user va*/, mode_t mode)
 
     if ((error = fileopen(path, dirfd, O_CREAT, S_IFDIR | mode)) < 0)
         return error;
-    fileclose(myproc()->ofile[error]);
+    if (myproc()->ofile[error]) fileclose(myproc()->ofile[error]);
     return 0;
 }
 
@@ -504,7 +449,7 @@ int sys_mknodat(int dirfd, uint64_t pathp/* user va*/, mode_t mode, dev_t dev)
     if ((error = check_fdcwd(path, dirfd)) < 0)
         return error;
 
-    debug("path: %s, mode: 0x%lx, dev: 0x%lx", path, mode, dev);
+    trace("path: %s, mode: 0x%lx, dev: 0x%lx", path, mode, dev);
     return filemknod(path, mode, (device_t)dev);
 }
 
@@ -540,7 +485,7 @@ int sys_execve(uint64_t pathp/* user va*/, uint64_t argvp/* user va*/, uint64_t 
     if (argstr(pathp, path, MAXPATH) < 0)
         return -EIO;
 
-    debug("path: %s, argvp: 0x%lx, envpp: 0x%lx", path, argvp, envpp);
+    trace("path: %s, argvp: 0x%lx, envpp: 0x%lx", path, argvp, envpp);
 
     memset(argv, 0, sizeof(argv));
     if (argvp != 0 && argvp != -1) {
@@ -572,6 +517,7 @@ int sys_execve(uint64_t pathp/* user va*/, uint64_t argvp/* user va*/, uint64_t 
                 goto bad;
             }
             memcpy(argv[argc], buf, error + 1);
+            trace("argv[%d]: %s", argc, argv[argc]);
         }
     } else {
         argc = 0;
@@ -606,6 +552,7 @@ int sys_execve(uint64_t pathp/* user va*/, uint64_t argvp/* user va*/, uint64_t 
                 goto bad;
             }
             memcpy(envp[envc], buf, error + 1);
+            trace("envp[%d]: %s", envc, envp[envc]);
         }
     } else {
         envc = 0;

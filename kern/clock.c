@@ -1,5 +1,7 @@
 #include <types.h>
 #include <clock.h>
+#include <sched.h>
+#include <vm.h>
 #include <timer.h>
 #include <linux/time.h>
 #include <arm.h>
@@ -8,6 +10,7 @@
 #include <rtc.h>
 #include <console.h>
 #include <spinlock.h>
+#include <linux/errno.h>
 
 // arm汎用仮想タイマーを計時に使用する
 
@@ -69,11 +72,61 @@ void clock_intr(void *param)
     update_times();
     //wakeup(&jiffies);
     release(&clocklock);
-    run_timer_list();
+    //run_timer_list();
 }
 
+int clock_gettime(clockid_t clk_id, uint64_t tpp, int user)
+{
+    struct timespec tp;
+    int ret = 0;
 
+    switch(clk_id) {
+        default:
+            ret = -EINVAL;
+        case CLOCK_REALTIME:
+            acquire(&clocklock);
+            tp.tv_nsec = xtime.tv_nsec;
+            tp.tv_sec = xtime.tv_sec;
+            release(&clocklock);
+            if (user)
+                ret = copyout(myproc()->mm, tpp, (char *)&tp, sizeof(tp));
+            else
+                memmove((char *)tpp, (const char *)&tp, sizeof(tp));
+            break;
+        case CLOCK_PROCESS_CPUTIME_ID:
+#if 0
+            acquire(&clocklock);
+            ptime = (p->stime + p->utime) * TICK_NSEC;
+            tp->tv_nsec = ptime % 1000000000;
+            tp->tv_sec  = ptime / 1000000000;
+            release(&clocklock);
+#endif
+            ret = -EINVAL;
+            break;
+    }
 
+    return ret;
+}
 
+int clock_settime(clockid_t clk_id, uint64_t tpp)
+{
+    struct timespec tp;
+    int ret = 0;
 
+    switch(clk_id) {
+        default:
+            ret = -EINVAL;
+        case CLOCK_REALTIME:
+            //if (capable(CAP_SYS_TIME)) {
+            if ((ret = copyin(myproc()->mm, (char *)&tp, tpp, sizeof(tp))) < 0)
+                break;
+            acquire(&clocklock);
+            xtime.tv_nsec = tp.tv_nsec;
+            xtime.tv_sec = tp.tv_sec;
+            release(&clocklock);
+            rtc_settime(&tp);
+            break;
+    }
+    return ret;
+}
 

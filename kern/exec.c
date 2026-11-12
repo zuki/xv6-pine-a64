@@ -39,7 +39,7 @@ static int flags2perm(int flags)
 int exec(char *path, char *argv[], int argcc, char *envp[], int envcc)
 {
     char *s, *last;
-    int i, off;
+    int i, off, pn=0;
     uint64_t argc = 0, envc = 0;
     uint64_t sz = 0, sz1, sp, ustack[MAXARG], estack[MAXARG], argbase;
     struct mm_struct *tmpmm = 0;  // new mm to prep aside, and commit to user VM
@@ -49,7 +49,7 @@ int exec(char *path, char *argv[], int argcc, char *envp[], int envcc)
     void *kva;
     struct task_struct *p = myproc();
 
-    debug("pid: %d, path: %s, argv: %p, envp: %p, argc: %d, envc: %d", myproc()->pid, path, argv, envp, argcc, envcc);
+    trace("pid: %d, path: %s, argv: %p, envp: %p, argc: %d, envc: %d", myproc()->pid, path, argv, envp, argcc, envcc);
 
     if ((ip = namei(path, AT_FDCWD)) == 0){
         return -1;
@@ -70,16 +70,16 @@ int exec(char *path, char *argv[], int argcc, char *envp[], int envcc)
     if (p->mm->pgd == 0) // タスクは有効なpgtableツリーを持っていなければならない
         goto bad;   // XXXX race condition; need lock
 
-    // 簡単のため、mm_structに1ページ割り当てる
-    _Static_assert(sizeof(struct mm_struct) <= PAGE_SIZE);
-    tmpmm = kalloc(1);
+    // 新しいプロセス用にstruct mmを作成する
+    tmpmm = (struct mm_struct *)kalloc(1);
     assert(tmpmm);
 
-    initlock(&tmpmm->lock, "tmpmmlock");
+    memset(tmpmm, 0, sizeof(struct mm_struct));
 
+    initlock(&tmpmm->lock, "tmpmmlock");
     tmpmm->kernel_pages_count = p->mm->kernel_pages_count;
     memmove(&tmpmm->kernel_pages, &p->mm->kernel_pages, sizeof(tmpmm->kernel_pages));
-    tmpmm->pgd = 0; // 新規pgtableツリーでスタートする
+    //tmpmm->pgd = 0; // 新規pgtableツリーでスタートする
 
     // プログラムをtmpmmのメモリにロードする: すべてのプログラムヘッダーについてイテレートする
     // 注: 以下のコードはp_vaddrが昇順になっていることを仮定している
@@ -107,7 +107,7 @@ int exec(char *path, char *argv[], int argcc, char *envp[], int envcc)
         sz = sz1;
         // コードをロードする
         if (loadseg(tmpmm, ph.p_vaddr, ip, ph.p_offset, ph.p_filesz) < 0)
-            goto bad;
+                goto bad;
     }
     iunlockput(ip);
     ip = 0;
@@ -140,7 +140,7 @@ int exec(char *path, char *argv[], int argcc, char *envp[], int envcc)
             if (argc >= MAXARG)
                 goto bad;
             sp -= strlen(argv[argc]) + 1;
-            sp -= sp % 16;
+            //sp -= sp % 16;
             if (sp < argbase)       // 引数の合計が1ページを超えたらエラー
                 goto bad;
             if (copyout(tmpmm, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
@@ -157,7 +157,7 @@ int exec(char *path, char *argv[], int argcc, char *envp[], int envcc)
             if (envc >= MAXARG)
                 goto bad;
             sp -= strlen(envp[envc]) + 1;
-            sp -= sp % 16;
+            //sp -= sp % 16;
             if (sp < argbase)       // 引数と環境変数の合計が1ページを超えたらエラー
                 goto bad;
             if (copyout(tmpmm, sp, envp[envc], strlen(envp[envc]) + 1) < 0)
@@ -172,31 +172,31 @@ int exec(char *path, char *argv[], int argcc, char *envp[], int envcc)
     uint64_t auxv[][2] = { {AT_PAGESZ, PGSIZE}, {AT_NULL, 0} };
     uint64_t auxv_size = sizeof(auxv);
 
-    sp -= 4 * sizeof(uint64_t);
     sp -= sp % 16;
+    sp -= 3 * sizeof(uint64_t);
     if (sp < argbase)
         goto bad;
-    if (copyout(tmpmm, sp, (char *)auxv, 4*sizeof(uint64_t)) < 0)
-        goto bad;
-
-    // push the array of argv[] pointers.
-    sp -= (argc+1) * sizeof(uint64_t);
-    sp -= sp % 16;  // fxl: do we need this
-    if (sp < argbase)
-        goto bad;
-    if (copyout(tmpmm, sp, (char *)ustack, (argc+1)*sizeof(uint64_t)) < 0)
+    if (copyout(tmpmm, sp, (char *)auxv, 3*sizeof(uint64_t)) < 0)
         goto bad;
 
     // push the array of envp[] pointers.
     sp -= (envc+1) * sizeof(uint64_t);
-    sp -= sp % 16;  // fxl: do we need this
+    //sp -= sp % 16;  // fxl: do we need this
     if (sp < argbase)
         goto bad;
     if (copyout(tmpmm, sp, (char *)estack, (envc+1)*sizeof(uint64_t)) < 0)
         goto bad;
 
+    // push the array of argv[] pointers.
+    sp -= (argc+1) * sizeof(uint64_t);
+    //sp -= sp % 16;  // fxl: do we need this
+    if (sp < argbase)
+        goto bad;
+    if (copyout(tmpmm, sp, (char *)ustack, (argc+1)*sizeof(uint64_t)) < 0)
+        goto bad;
+
     sp -= sizeof(uint64_t);
-    sp -= sp % 16;
+    //sp -= sp % 16;
     if (sp < argbase)
         goto bad;
     if (copyout(tmpmm, sp, (char *)&argc, sizeof(uint64_t)) < 0)
@@ -208,7 +208,7 @@ int exec(char *path, char *argv[], int argcc, char *envp[], int envcc)
     struct trapframe *regs = task_pt_regs(p);
     regs->regs[1] = sp;
 
-    // Save program name for debugging.
+    // Save program name for traceging.
     for (last = s = path; *s; s++)
         if (*s == '/')
             last = s+1;
@@ -217,9 +217,10 @@ int exec(char *path, char *argv[], int argcc, char *envp[], int envcc)
     /* Commit to the user VM. free previous user mapping & pages. if any */
     regs->pc = elf.e_entry;  // initial program counter = main
     regs->sp = sp; // initial stack pointer
-    trace("pid %d (%s) commit to user VM, sp 0x%lx", myproc()->pid, myproc()->name, sp);
+    trace("pid %d (%s) commit to user VM, sp 0x%lx, pc: 0x%lx", myproc()->pid, myproc()->name, regs->sp, regs->pc);
 
     acquire(&p->mm->lock);
+    // 親プロセスのユーザページを削除
     free_task_pages(p->mm, 1 /*useronly*/);
 
     // Careful: transfer refcnt/lock from the existing mm
@@ -227,14 +228,16 @@ int exec(char *path, char *argv[], int argcc, char *envp[], int envcc)
     tmpmm->lock = p->mm->lock;
     *(p->mm) = *tmpmm;  // commit (NB: compiled as memcpy())
     p->mm->sz = p->mm->codesz = sz;
-    trace("pid: %d, p->mm: %lx, p->mm->sz: 0x%lx", p->pid,(unsigned long)p->mm, p->mm->sz);
+    p->mm->vmas = NULL;
+    trace("pid: %d, p->mm: %lx, p->mm->sz: 0x%lx, vmas: %p", p->pid,(unsigned long)p->mm, p->mm->sz, p->mm->vmas);
     kfree(tmpmm);
     set_pgd(p->mm->pgd);
     release(&p->mm->lock);
 
-    hexdump((char *)sp, USER_TOP - sp, "stack");
+    //hexdump((char *)USER_TOP, USER_TOP - sp, "stack", true);
+    //hexdump((char *)0x400000, 0x200, "code", false);
 
-    debug("path: %s, pid %d exec succeeds, return %d", path, myproc()->pid, argc);
+    trace("path: %s, pid %d exec ok, return %d", path, myproc()->pid, argc);
     return argc; // this ends up in x0, the first argument to main(argc, argv)
 
 bad:
@@ -267,7 +270,7 @@ static int loadseg(struct mm_struct* mm, uint64_t va, struct inode *ip,
 
     uint64_t addr = va & 0x0fffUL;
 
-    debug("va: 0x%lx, ino: %d, offset: 0x%x, sz: 0x%x, addr: 0x%lx", va, ip->inum, offset, sz, addr);
+    trace("va: 0x%lx, ino: %d, offset: 0x%x, sz: 0x%x, addr: 0x%lx", va, ip->inum, offset, sz, addr);
     assert(mm);
 
     // Verify mapping page by page, then load from file
@@ -286,14 +289,13 @@ static int loadseg(struct mm_struct* mm, uint64_t va, struct inode *ip,
             n = PAGE_SIZE;
         }
         // NB: fs func called by readi() may grab sched_lock()
-        trace("pa: 0x%lx, offset: 0x%x, n: 0x%x", pa, offset, n);
+        trace("va: 0x%lx, pa: 0x%lx, offset: 0x%x, n: 0x%x", va, pa, offset, n);
         if (readi(ip, 0/*to kernel va*/, (uint64_t)P2V(pa), offset, n) != n)
             return -1;
-        //hexdump(P2V(pa), n, "loadseq");
+        //hexdump(P2V(pa), n, "loadseq", false);
         offset += n;
         va += n;
     }
 
     return 0;
 }
-

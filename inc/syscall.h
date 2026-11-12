@@ -16,15 +16,16 @@ int in_user(uint64_t addr, size_t n);
 int argstr(uint64_t addr, char *buf, int max);
 int argptr(uint64_t addr, char *pp, size_t size);
 
+int sys_clock_gettime(clockid_t clock_id, uint64_t tpp);
+int sys_clock_settime(clockid_t clock_id, uint64_t tpp);
+
 #if 0
-int sys_clock_gettime(void);
 int sys_sched_getaffinity(void);
 int sys_prlimit64(void);
 int sys_sysinfo(void);
 int sys_nanosleep(void);
 int sys_getrandom(void);
 int sys_uname(void);
-int sys_clock_settime(void);
 int sys_ppoll(void);
 int sys_madvise(void);
 #endif
@@ -65,12 +66,12 @@ int sys_setgroups(void);
 int sys_gettid(void);
 int sys_getpid(void);
 int sys_getppid(void);
-int sys_set_tid_address(void);
-void *sys_mmap(void);
-int sys_munmap(void);
-int sys_msync(void);
-void *sys_mremap(void);
-int sys_mprotect(void);
+int sys_set_tid_address(int *tidptr);
+void *sys_mmap(uint64_t addrp, size_t length, int prot, int flags, int fd, off_t offset);
+int sys_munmap(uint64_t addrp, size_t length);
+int sys_msync(uintptr_t addr, size_t length, int flags);
+void *sys_mremap(uintptr_t addr, size_t old_size, size_t new_size, int flags, uintptr_t new_addr);
+int sys_mprotect(uintptr_t addr, size_t length, int prot);
 int sys_madvise(void);
 int sys_getitimer(void);
 int sys_setitimer(void);
@@ -103,7 +104,7 @@ int sys_ioctl(int fd, uint64_t req, uint64_t argp);
 int sys_fcntl(int fd, int cmd, int args);
 int sys_getdents64(int fd, uint64_t dirp, size_t count);
 
-int sys_fstatat(void);
+int sys_fstatat(int dirfd, uint64_t pathp, uint64_t statp, int flags);
 int sys_fsync(void);
 int sys_fdatasync(void);
 int sys_faccessat(void);

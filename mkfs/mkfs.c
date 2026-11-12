@@ -16,11 +16,11 @@
 #define sleep xv6_sleep
 #include "usr_fs.h"
 
+#define NINODES 200
+
 #ifndef static_assert
 #define static_assert(a, b) do { switch (0) case 0: case (a): ; } while (0)
 #endif
-
-#define NINODES 200
 
 // Disk layout:
 // [ boot block | sb block | log | inode blocks | free bit map | data blocks ]
@@ -158,8 +158,8 @@ main(int argc, char *argv[])
     // Create /lib
     libino = make_dir(rootino, "lib", 0, 0, S_IFDIR|0777);
 
-    // Create /dev/tty1
-    //make_dev(devino, "tty1", TTYMAJOR, 1, 0, 0, S_IFCHR|0666);
+    // Create /dev/console
+    make_dev(devino, "console", 1, 0, 0, 0, S_IFCHR|0666);
 
     // copy /lib/*
     //copy_file(0, nelms(lib_files), lib_files, libino, 0, 0, S_IFREG|0755);

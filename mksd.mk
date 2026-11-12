@@ -4,6 +4,8 @@ USR_FILES := $(shell find obj/usr/bin -type f)
 
 .DELETE_ON_ERROR: $(FS_IMG)
 
+all: $(V6_IMG)
+
 mkfs/mkfs: mkfs/mkfs.c
 	cc -o mkfs/mkfs -Imkfs/ mkfs/mkfs.c
 

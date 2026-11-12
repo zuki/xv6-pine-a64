@@ -21,6 +21,7 @@
 #define SYNC_ERROR              13
 #define SYSCALL_ERROR           14
 #define DATA_ABORT_ERROR        15
+#define UNDEFUN_SYSCALL         16
 
 #ifndef __ASSEMBLER__
 void ret_from_fork(void);
