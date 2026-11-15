@@ -300,3 +300,64 @@ void panic(const char *fmt, ...)
     while (1) ;
 }
 #endif
+
+void hexdump(const void *data, size_t size, const char *name, bool desc)
+{
+    unsigned char *src;
+    int offset, index;
+
+    src = (unsigned char *)data;
+    cprintf("=== %s dump (%s) ===\n", name ? name : "", desc ? "descending" : "ascendng");
+    cprintf("+--------------------+-----------------------------------------+------------------+\n");
+    if (desc) { // 降順
+        for (offset = -16; -offset <= size; offset -= 16) {
+            cprintf("| 0x%016lx | ", (uint64_t)src + offset);
+            for (index = 0; index < 16; index+=2) {
+                if (-(offset + index) <= (int)size) {
+                    cprintf("%02x%02x ", 0xff & src[offset + index], 0xff & src[offset + index + 1]);
+                } else {
+                    cprintf("     ");
+                }
+            }
+            cprintf("| ");
+            for (index = 0; index < 16; index++) {
+                if (-(offset + index) <= (int)size) {
+                    if (isascii(src[offset + index]) && isprint(src[offset + index])) {
+                        cprintf("%c", src[offset + index]);
+                    } else {
+                        cprintf(".");
+                    }
+                } else {
+                    cprintf(" ");
+                }
+            }
+            cprintf(" |\n");
+        }
+    } else {    // 昇順
+        for (offset = 0; offset < (int)size; offset += 16) {
+            cprintf("| 0x%016lx | ", (uint64_t)src + offset);
+            for (index = 0; index < 16; index+=2) {
+                if (offset + index < (int)size) {
+                    cprintf("%02x%02x ", 0xff & src[offset + index], 0xff & src[offset + index + 1]);
+                } else {
+                    cprintf("     ");
+                }
+            }
+            cprintf("| ");
+            for (index = 0; index < 16; index++) {
+                if (offset + index < (int)size) {
+                    if (isascii(src[offset + index]) && isprint(src[offset + index])) {
+                        cprintf("%c", src[offset + index]);
+                    } else {
+                        cprintf(".");
+                    }
+                } else {
+                    cprintf(" ");
+                }
+            }
+            cprintf(" |\n");
+        }
+    }
+    cprintf("+--------------------+-----------------------------------------+------------------+\n\n");
+
+}

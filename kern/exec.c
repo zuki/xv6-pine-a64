@@ -186,6 +186,8 @@ int execve(const char *path, char *const argv[], char *const envp[])
     sp = newsp;
     trace("newsp: 0x%p", sp);
 
+    //hexdump((char *)USER_TOP, USER_TOP - (uint64_t)sp, "stack", true);
+
     // Allocate user stack.
     stksz = ROUNDUP(USER_TOP - (size_t)sp, 10 * PGSIZE);
     if (copyout
