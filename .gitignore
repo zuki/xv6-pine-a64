@@ -48,3 +48,4 @@ usr/initcode/initcode.S.1
 usr/initcode/initcode.S.2
 user_init/initcode.inc
 
+docs/src/old/linux_initrd
