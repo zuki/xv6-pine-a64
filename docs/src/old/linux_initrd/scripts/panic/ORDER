@@ -1,4 +1,0 @@
-/scripts/panic/console_setup "$@"
-[ -e /conf/param.conf ] && . /conf/param.conf
-/scripts/panic/plymouth "$@"
-[ -e /conf/param.conf ] && . /conf/param.conf
