@@ -9,7 +9,7 @@
     - user_process()のアドレスがmain.cから取得できなくなった
     - とりあえず、オブジェクトファイルを見て、固定値をセットした
     - user_strlen(), start_secondary_cores()をstatic inline関数として
-      user.cを1関数にし、user_process()が_user_beginの戦闘になるようにした(10/19)
+      user.cを1関数にし、user_process()が_user_beginの先頭になるようにした(10/19)
 
 2. sched_init()のassert()でpanic
     - アドレスに問題はなくassert()の条件が間違っていた
@@ -69,7 +69,7 @@
 
 2. /bin/initのカーネル処理は正常終了したが、実行時エラーが発正
 
-3. argv, envpの救った積込みがおかしい?
+3. argv, envpのスタック積込みがおかしい?
     - 正しく積まれていた
     - addr = 0x0 にアクセスしている
     - inicode.Sにexitの呼び出しを追加したが結果は同じ
@@ -90,6 +90,58 @@
     - loadseg()でreadiしたpaをダンプしたが(20261024pm.logを参照)、正常にセットされていると思われた。
 
 5. 一旦、凍結して、xv6のprocに変更することにする
+
+## 2026/11/11 再開
+
+- uvaのuser.ldはエントリポイントが_main, 先頭アドレスは0, rodataの後に4096バイトアライン
+    - _mainは独自libcのcrt0で何もせず直接main()を呼び出している
+    - rodataの後にページアラインがあるためプログラムヘッダーがすべてページアラインとなりloadsegが簡単になっている
+    - エントリポイントを_startに変え、muslに使うと_init_tlsでヌルポが発生したので使えない
+- muslでビルドした場合は先頭アドレスは0x400000であり、vm.cのgrowproc(),
+  dup_current_virt_memory(), sched.cのmove_to_user_mode()でコードの先頭アドレスに
+  0x400000 (USER_BASE)を足す必要がある
+- initcodeから呼び出される/bin/initの設定はできているが、コマンド実行時にヌルポが発生している模様
+    - user/initcodeにsys_execve後にwfiでloopを追加
+    - argvの追加をしたが結果は変わらず
+    - どこで発生アドレスが0、データアドレスも0であり、問題発生箇所が特定できない
+- 未実装のシステムコールのアクセスだった
+    - 未実装のシステムコールは番号を出力して終了するよう変更した
+- mm->szはUSER_BASEが加算された値だったので、それに付随するコードを修正した
+- shプロンプトが出力されるようになった
+    - 入力はできないがこれはgicの修正をしていないためと思われる
+
+## 2026/11/12
+
+- gic, console.cを修正したらusr/initのclone処理でエラー発生
+    - trapframeにtpidr_el0を保存することでこのエラーは修正された
+- shプロンプトが出て、入力もできるが、panicが2回発生
+    - 1回目はwait4()でsleep明けにreleaseしていないため
+    - 2回目はsys_brk()のapiがmusl仕様になっていなかったため
+- shでlsを実行した際に、未実装エラーが出るようになった
+- cpuを1つにするとidleから抜け出させない
+
+## 2026/11/13
+
+- mmap, munmapなど必要な関数を実装
+- lsコマンドでenvpをpathとして実行してしまい、sys_fstatatでエラー
+    - argv, envpのスタックへの積み込みを調査する
+
+## 2026/11/14
+
+- exec.cの初期スタックがxv6版と違っていたので修正
+    - 16バイトアラインをargv, envp, auxv, estack, estack, argcのすべてで
+    　行っていたが、auxvのところ以外は不要だった。
+    - `sys_mmap#L55: addr: 0x0, length: 0x0`というエラーが出ていたが
+      xv6版と完全に同じにすることでこのエラーはなくなった
+- mmap.cでバグがあるようでメモリエラーがでている
+
+## 2026/11/15
+
+- uvm_map()でpteフラグの設定に間違いがあった
+- exec.cで作成した暫定mmでuser_pages_countの初期化を忘れていてエラー発生
+- sh, ls, cat, echoが動いた
+
+- 書き込みができないことが判明
 
 ## 2026/10/17の実行ログ
 
@@ -1406,4 +1458,592 @@ PANIC [0]fileclose#L249: fileclose
 [0]exec#L237: path: /bin/sh, pid 1 exec succeeds, return 1
 [0]show_invalid_entry_message#L261: SYNC_INVALID_EL1h, esr: 0x0000000086000006, elr: 0x0000000000000000, far: 0x0000000000000000
 [0]show_invalid_entry_message#L263: online esr decoder: https://esr.arm64.dev/#0x0000000086000006
+```
+
+## 2026/11/11
+
+```bash
+[0]init#L259: start arg: 0x0
+[0]copy_process#L680: flags: 0x2, fn: 0xffff000042013a00, arg: 0x0, name: kern-1
+[0]copy_process#L706: kthread
+[0]copy_process#L760: p->id 1 ok
+[0]init#L261: pid: 1
+[0]leave_scheduler#L188: release: cpu 0 pid 1
+[0]move_to_user_mode#L633: start: 0xffff000042024020, size: 0x40, pc: 0x0
+[0]allocate_user_page_mm#L123: call map_page with va: 0x400000, page: 0x4a7fe000, alloc: 1, perm: 0x747
+[0]map_page#L191: va: 0x400000, page: 0x4a7fe000, alloc: 1, perm: 0x747
+[0]fsinit#L56: fsinit ok
+[0]kernel_process#L129: move_to_user_mode ok
+[0]map_page#L191: va: 0x400000, page: 0x0, alloc: 0, perm: 0x0
+[0]sys_execve#L543: path: /bin/init, argvp: 0x400028, envpp: 0x0
+[0]map_page#L191: va: 0x400000, page: 0x0, alloc: 0, perm: 0x0
+[0]map_page#L191: va: 0x400000, page: 0x0, alloc: 0, perm: 0x0
+[0]map_page#L191: va: 0x400000, page: 0x0, alloc: 0, perm: 0x0
+[0]exec#L52: pid: 1, path: /bin/init, argv: 0xffff00004202ccd0, envp: 0xffff00004202cdd0, argc: 1, envc: 0
+[0]allocate_user_page_mm#L123: call map_page with va: 0x400000, page: 0x4a7f8000, alloc: 1, perm: 0x7c7
+[0]map_page#L191: va: 0x400000, page: 0x4a7f8000, alloc: 1, perm: 0x7c7
+[0]allocate_user_page_mm#L123: call map_page with va: 0x401000, page: 0x4a7df000, alloc: 1, perm: 0x7c7
+[0]map_page#L191: va: 0x401000, page: 0x4a7df000, alloc: 1, perm: 0x7c7
+[0]map_page#L191: va: 0x400000, page: 0x0, alloc: 0, perm: 0x0
+[0]loadseg#L291: va: 0x400000, pa: 0x4a7f8000, offset: 0x1000, n: 0x1000
+[0]map_page#L191: va: 0x401000, page: 0x0, alloc: 0, perm: 0x0
+[0]loadseg#L291: va: 0x401000, pa: 0x4a7df000, offset: 0x2000, n: 0xf98
+[0]allocate_user_page_mm#L123: call map_page with va: 0x402000, page: 0x4a7de000, alloc: 1, perm: 0x747
+[0]map_page#L191: va: 0x402000, page: 0x4a7de000, alloc: 1, perm: 0x747
+[0]allocate_user_page_mm#L123: call map_page with va: 0x403000, page: 0x4a7dd000, alloc: 1, perm: 0x747
+[0]map_page#L191: va: 0x403000, page: 0x4a7dd000, alloc: 1, perm: 0x747
+[0]map_page#L191: va: 0x402f98, page: 0x0, alloc: 0, perm: 0x0
+[0]loadseg#L291: va: 0x402f98, pa: 0x4a7def98, offset: 0x2f98, n: 0x68
+[0]map_page#L191: va: 0x403000, page: 0x0, alloc: 0, perm: 0x0
+[0]loadseg#L291: va: 0x403000, pa: 0x4a7dd000, offset: 0x3000, n: 0x130
+[0]allocate_user_page_mm#L123: call map_page with va: 0xfffffffff000, page: 0x4a7dc000, alloc: 1, perm: 0x747
+[0]map_page#L191: va: 0xfffffffff000, page: 0x4a7dc000, alloc: 1, perm: 0x747
+[0]allocate_user_page_mm#L123: call map_page with va: 0xffffffeff000, page: 0x4a7d8000, alloc: 1, perm: 0x707
+[0]map_page#L191: va: 0xffffffeff000, page: 0x4a7d8000, alloc: 1, perm: 0x707
+[0]map_page#L191: va: 0xfffffffff000, page: 0x0, alloc: 0, perm: 0x0
+[0]map_page#L191: va: 0xfffffffff000, page: 0x0, alloc: 0, perm: 0x0
+[0]map_page#L191: va: 0xfffffffff000, page: 0x0, alloc: 0, perm: 0x0
+[0]map_page#L191: va: 0xfffffffff000, page: 0x0, alloc: 0, perm: 0x0
+[0]map_page#L191: va: 0xfffffffff000, page: 0x0, alloc: 0, perm: 0x0
+[0]exec#L220: pid 1 (init) commit to user VM, sp 0xffffffffffa0, pc: 0x400104
+[0]free_user_page_range#L512: call map_page with va: 0x400000
+[0]map_page#L191: va: 0x400000, page: 0x0, alloc: 0, perm: 0x0
+[0]free_user_page_range#L525: va: 0x400000, size: 0x1000 ok
+[0]growproc#L568: incr: -4096, sz: 0x0 ok
+[0]free_task_pages#L498: ok
+=== stack dump ===
++--------------------+-----------------------------------------+------------------+
+| 0x0000ffffffffffa0 | 0100 0000 0000 0000 0000 0000 0000 0000 | ................ |
+| 0x0000ffffffffffb0 | 0000 0000 0000 0000 0000 0000 0000 0000 | ................ |
+| 0x0000ffffffffffc0 | f0ff ffff ffff 0000 0000 0000 0000 0000 | ................ |
+| 0x0000ffffffffffd0 | 0600 0000 0000 0000 0010 0000 0000 0000 | ................ |
+| 0x0000ffffffffffe0 | 0000 0000 0000 0000 0000 0000 0000 0000 | ................ |
+| 0x0000fffffffffff0 | 2f62 696e 2f69 6e69 7400 0000 0000 0000 | /bin/init....... |
++--------------------+-----------------------------------------+------------------+
+
+=== code dump ===
++--------------------+-----------------------------------------+------------------+
+| 0x0000000000400000 | fd7b bfa9 fd03 0091 fd7b c1a8 c003 5fd6 | .{.......{...._. |
+| 0x0000000000400010 | 0000 0000 0000 0000 0000 0000 0000 0000 | ................ |
+| 0x0000000000400020 | fe0f 1ef8 e01f 00b9 dc00 0094 dc00 0094 | ................ |
+| 0x0000000000400030 | 2607 0094 e01f 40b9 af03 0094 1f20 03d5 | &.....@...... .. |
+| 0x0000000000400040 | fd7b bea9 4100 8052 fd03 0091 f353 01a9 | .{..A..R.....S.. |
+| 0x0000000000400050 | 1300 00b0 73c2 3991 e003 13aa de00 0094 | ....s.9......... |
+| 0x0000000000400060 | 2004 f837 1400 00b0 94a2 3a91 0000 8052 |  ..7......:....R |
+| 0x0000000000400070 | eb02 0094 0000 8052 e902 0094 1f20 03d5 | .......R..... .. |
+| 0x0000000000400080 | 1501 0094 f303 002a 4001 f837 c001 0034 | .......*@..7...4 |
+| 0x0000000000400090 | 0000 80d2 6601 0094 1f00 0071 64a2 407a | ....f......qd.@z |
+| 0x00000000004000a0 | 00ff ff54 e003 14aa 9201 0094 f9ff ff17 | ...T............ |
+| 0x00000000004000b0 | 0000 00b0 0020 3a91 8e01 0094 2000 8052 | ..... :..... ..R |
+| 0x00000000004000c0 | d8ff ff97 0200 00f0 4200 0091 4180 0091 | ........B...A... |
+| 0x00000000004000d0 | 0000 00b0 0080 3a91 f700 0094 2000 8052 | ......:..... ..R |
+| 0x00000000004000e0 | d0ff ff97 0220 80d2 e003 13aa 0100 8452 | ..... .........R |
+| 0x00000000004000f0 | 7601 0094 e003 13aa 4100 8052 b600 0094 | v.......A..R.... |
+| 0x0000000000400100 | d9ff ff17 1d00 80d2 1e00 80d2 e003 0091 | ................ |
+| 0x0000000000400110 | 0100 0090 2100 0091 1fec 7c92 0100 0014 | ....!.....|..... |
+| 0x0000000000400120 | e203 00aa 0500 80d2 0400 00d0 84e8 47f9 | ..............G. |
+| 0x0000000000400130 | 4184 40f8 0300 00d0 63d8 47f9 0000 00d0 | A.@.....c.G..... |
+| 0x0000000000400140 | 00e0 47f9 8300 0014 c003 5fd6 c003 5fd6 | ..G......._..._. |
+| 0x0000000000400150 | fe4f a8a9 0226 80d2 f303 01aa 0100 8052 | .O...&.........R |
+| 0x0000000000400160 | f457 01a9 f403 00aa e043 0191 8d01 0094 | .W.......C...... |
+| 0x0000000000400170 | 0000 00f0 0100 80d2 14fc 02f9 807a 61f8 | .............za. |
+| 0x0000000000400180 | 2104 0091 c0ff ffb5 1500 00f0 b542 0591 | !............B.. |
+| 0x0000000000400190 | 800e 018b a006 00f9 1400 40f9 b402 00b5 | ..........@..... |
+| 0x00000000004001a0 | 0000 00f0 e16b 40f9 01a4 00f9 e0ab 40f9 | .....k@.......@. |
+| 0x00000000004001b0 | 6000 00b4 0100 00f0 2098 00f9 e043 40f9 | `....... ....C@. |
+| 0x00000000004001c0 | a01a 00f9 d300 00b5 e0a7 40f9 1300 00b0 | ..........@..... |
+| 0x00000000004001d0 | 7342 3c91 1f00 00f1 7302 809a 0000 00f0 | sB<.....s....... |
+| 0x00000000004001e0 | 0100 00f0 139c 00f9 33a0 00f9 0a00 0014 | ........3....... |
+| 0x00000000004001f0 | 9f96 00f1 8800 0054 e243 0191 0104 40f9 | .......T.C....@. |
++--------------------+-----------------------------------------+------------------+
+
+
+[0]exec#L239: path: /bin/init, pid 1 exec succeeds, return 1
+[0]show_invalid_entry_message#L261: SYNC_INVALID_EL1h, esr: 0x0000000086000006, elr: 0x0000000000000000, far: 0x0000000000000000
+[0]show_invalid_entry_message#L263: online esr decoder: https://esr.arm64.dev/#0x0000000086000006
+```
+
+- syscallno=96: sys_set_tid_addressが未実装
+
+```bash
+[0]exec#L239: path: /bin/init, pid 1 exec succeeds, return 1
+[0]show_invalid_entry_message#L263: Undefined syscall: 96, esr: 0x0000000056000000, elr: 0x0000000000400c78, far: 0x0000000000000000
+[0]show_invalid_entry_message#L264: online esr decoder: https://esr.arm64.dev/#0x0000000056000000
+```
+
+-　システムコールの追加、ユーザアドレスの修正などを実施
+
+```bash
+[0]fsinit#L56: fsinit ok
+[0]kernel_process#L130: move_to_user_mode ok
+[0]sys_execve#L543: path: /bin/init, argvp: 0x0, envpp: 0x0
+[0]exec#L52: pid: 1, path: /bin/init, argv: 0xffff00004202bcd0, envp: 0xffff00004202bdd0, argc: 0, envc: 0
+[0]exec#L239: path: /bin/init, pid 1 exec ok, return 0
+[0]sys_openat#L466: path: /dev/console, flags: 0x20002, mode: 0x0
+[2]sys_set_tid_address#L76: set_tid_address: name 'init', tidptr: 0x403780
+[0]fileopen#L233: proc[1], path: /dev/console, fd: 0, flags: 131074, mode: 0x21b6
+[0]sys_dup#L79: fd: 0
+[0]sys_dup#L79: fd: 0
+[0]sys_clone#L192: flags: 0x11, stack: 0x0
+[0]sys_wait4#L224: [-1] pid: 0, statusp: 0x0, options: 0x0, rusagep: 0xc
+[0]sys_execve#L543: path: /bin/sh, argvp: 0x403020, envpp: 0x403000
+[0]exec#L52: pid: 2, path: /bin/sh, argv: 0xffff00004202ccd0, envp: 0xffff00004202cdd0, argc: 1, envc: 3
+[0]exec#L239: path: /bin/sh, pid 2 exec ok, return 1
+[0]sys_openat#L466: path: /dev/console, flags: 0x20002, mode: 0x0
+[0]fileopen#L233: proc[2], path: /dev/console, fd: 3, flags: 131074, mode: 0x21b6
+$                                                                                       // プロンプトは出力されたが入力できない
+```
+
+## 2026/11/12
+
+```bash
+[2]sys_clone#L193: flags: 0x11, stack: 0x0
+[2]sys_clone#L202: pid: 2
+[2]sys_wait4#L227: [-1] pid: 0, statusp: 0x0, options: 0x0, rusagep: 0xc
+[0]sys_gettid#L377: gettid: name 'init'
+[0]do_mem_abort#L589: bad user va? faulty addr 0xffffffffffffff58 > USER_TOP 0x0
+esr 0x92000044, elr 0x400f60
+show_stack_user: Call trace (pid 2 init):
+addr2line -e ./usr/build/init.debug \
+0x400f5c \
+0x400348 \
+[0]show_invalid_entry_message#L234: SYNC_INVALID_EL1h, esr: 0x0000000096000006, elr: 0xffff000042018210, far: 0x0000000000000004
+[0]show_invalid_entry_message#L237: online esr decoder: https://esr.arm64.dev/#0x0000000096000006
+```
+
+- usr/bin/init
+
+```assembly
+  400f38:       d2801b88        mov     x8, #0xdc                       // #220 : sys_clone
+  400f3c:       d2800220        mov     x0, #0x11                       // #17
+  400f40:       d2800001        mov     x1, #0x0                        // #0
+  400f44:       d4000001        svc     #0x0
+
+  400f48:       aa0003f4        mov     x20, x0
+  400f4c:       35000260        cbnz    w0, 400f98 <_Fork+0x88>         // if (pid != 0) goto 400f98
+                                                                        // ここからは子プロセスの処理
+  400f50:       d2801648        mov     x8, #0xb2                       // #178 : sys_gettid
+  400f54:       d53bd041        mrs     x1, tpidr_el0                   // tpidr_el0の値が0? : スレッド情報を格納するレジスタ
+  400f58:       d1032021        sub     x1, x1, #0xc8                   // x1 = 0 - 0xc8
+  400f5c:       d4000001        svc     #0x0                            //    = 0xff..ff38
+
+  400f60:       b9002020        str     w0, [x1, #32]                   // x1 = x1 + 0x20
+                                                                        //    = 0xff..ff58
+```
+
+- 上のエラーに対処
+
+```bash
+[0]kernel_process#L119: Kernel process started at EL 1, pid 1
+[2]timer_init#L31: timer_init ok
+[1]init#L262: pid: 1
+[0]fsinit#L56: fsinit ok
+[0]kernel_process#L130: move_to_user_mode ok
+[0]sys_execve#L544: path: /bin/init, argvp: 0x0, envpp: 0x0
+[0]exec#L52: pid: 1, path: /bin/init, argv: 0xffff00004202ccd0, envp: 0xffff00004202cdd0, argc: 0, envc: 0
+[0]exec#L239: path: /bin/init, pid 1 exec ok, return 0
+[0]fileopen#L233: proc[1], path: /dev/console, fd: 0, flags: 131074, mode: 0x21b6
+[0]sys_dup#L79: fd: 0
+[0]sys_dup#L79: fd: 0
+[0]sys_clone#L193: flags: 0x11, stack: 0x0
+[0]sys_clone#L202: pid: 2
+[0]sys_wait4#L227: [-1] pid: 0, statusp: 0x0, options: 0x0, rusagep: 0xc
+[2]sys_execve#L544: path: /bin/sh, argvp: 0x403020, envpp: 0x403000
+[2]exec#L52: pid: 2, path: /bin/sh, argv: 0xffff00004202dcd0, envp: 0xffff00004202ddd0, argc: 1, envc: 3
+[2]exec#L239: path: /bin/sh, pid 2 exec ok, return 1
+[2]fileopen#L233: proc[2], path: /dev/console, fd: 3, flags: 131074, mode: 0x21b6
+[2]sys_close#L204: fd: 3, f: 0xffff000042059980
+$ PANIC [1]acquire#L18: sched is locked                     // shプロンプトが出る
+/bin/ls /                                                   // 入力もできる
+[2]sys_clone#L193: flags: 0x11, stack: 0x0
+[2]sys_clone#L202: pid: 3
+[2]sys_wait4#L227: [-1] pid: 0, statusp: 0x0, options: 0x0, rusagep: 0xc
+[0]map_page#L234: MAX_TASK_KER_PAGES 96 reached
+[0]map_page#L277: failed. reverse allocated pgtables during tree walk
+[0]allocate_user_page_mm#L128: map_page failed: va=0xb400000, pa=0x5575e000, perm=0x40000000000040
+[0]growproc#L555: allocate_user_page_mm failed
+PANIC [0]acquire#L18: mm is locked
+```
+
+- sys_brk()のapiが違う
+    - newsz - sz = 0x41c03bd4 : 64ビット減算を32ビットで評価しているため
+    - そもそもnewszの値がおかしいので修正
+
+```bash
+$ /bin/ls /
+[1]sys_brk#L48: sz: 0x40b000, newsz: 0xffff00004200ebd4, incr: 0x41c03bd4   // newszがおかしい
+[1]map_page#L236: MAX_TASK_KER_PAGES 96 (94 + 3) reached
+[1]map_page#L279: failed. reverse allocated pgtables during tree walk
+[1]allocate_user_page_mm#L128: map_page failed: va=0xb400000, pa=0x5575e000, perm=0x40000000000040
+[1]growproc#L557: allocate_user_page_mm failed
+PANIC [1]acquire#L18: mm is locked
+```
+
+- syscall 79 (sys_fstatat) が未実装
+
+```bash
+$ /bin/ls /
+[1]sys_brk#L43: sz: 0x40b000, newsz: 0x40c000, incr: 0x1000
+[1]exec#L52: pid: 3, path: /bin/ls, argv: 0xffff00004202dcd0, envp: 0xffff00004202ddd0, argc: 2, envc: 2
+[1]exec#L239: path: /bin/ls, pid 3 exec ok, return 2
+[1]show_invalid_entry_message#L231: Undefined syscall: 79, esr: 0x0000000056000000, elr: 0x0000000000402788, far: 0x000
+[1]show_invalid_entry_message#L237: online esr decoder: https://esr.arm64.dev/#0x0000000056000000
+```
+
+## 2026/11/13
+
+```bash
+$ /bin/ls /
+[1]sys_brk#L42: sz: 0x40b000, newsz: 0x40c000, incr: 0x1000
+[1]exec#L52: pid: 3, path: /bin/ls, argv: 0xffff000042031cd0, envp: 0xffff000042031dd0, argc: 2, envc: 2
+=== stack dump ===
++--------------------+-----------------------------------------+------------------+
+| 0x0000ffffffffff50 | 0200 0000 0000 0000 0000 0000 0000 0000 | ................ |
+| 0x0000ffffffffff60 | d0ff ffff ffff 0000 c0ff ffff ffff 0000 | ................ |
+| 0x0000ffffffffff70 | 0000 0000 0000 0000 0000 0000 0000 0000 | ................ |
+| 0x0000ffffffffff80 | f0ff ffff ffff 0000 e0ff ffff ffff 0000 | ................ |
+| 0x0000ffffffffff90 | 0000 0000 0000 0000 0000 0000 0000 0000 | ................ |
+| 0x0000ffffffffffa0 | 0600 0000 0000 0000 0010 0000 0000 0000 | ................ |
+| 0x0000ffffffffffb0 | 0000 0000 0000 0000 0000 0000 0000 0000 | ................ |
+| 0x0000ffffffffffc0 | 545a 3d4a 5354 2d39 0000 0000 0000 0000 | TZ=JST-9........ |
+| 0x0000ffffffffffd0 | 5041 5448 3d2f 6269 6e00 0000 0000 0000 | PATH=/bin....... |
+| 0x0000ffffffffffe0 | 2f00 0000 0000 0000 0000 0000 0000 0000 | /............... |
+| 0x0000fffffffffff0 | 2f62 696e 2f6c 7300 0000 0000 0000 0000 | /bin/ls......... |
++--------------------+-----------------------------------------+------------------+
+
+[1]exec#L239: path: /bin/ls, pid 3 exec ok, return 2
+[1]sys_fstatat#L231: dirfd: -100, path: PATH=/bin, flags: 0x100     // 環境変数 "PATH=/bin"をpathとして実行されている
+[1]sys_fstatat#L247: PATH=/bin is not found
+can't get stat of PATH=/bin
+[1]show_invalid_entry_message#L234: SYNC_INVALID_EL1h, esr: 0x0000000096000006, elr: 0xffff00004201b4f0, far: 0x0000000000000004
+[1]show_invalid_entry_message#L237: online esr decoder: https://esr.arm64.dev/#0x0000000096000006
+```
+
+- exec.cの初期スタックを修正（未完成）
+
+```bash
+$ /bin/ls /
+[1]sys_brk#L42: name: sh, sz: 0x40b000, newsz: 0x40c000, incr: 0x1000
+[1]sys_brk#L46: ret: 0x40c000
+[1]exec#L52: pid: 3, path: /bin/ls, argv: 0xffff000042031cd0, envp: 0xffff000042031dd0, argc: 2, envc: 2
+=== stack dump (descending) ===
++--------------------+-----------------------------------------+------------------+
+| 0x0000fffffffffff0 | 2f62 696e 2f6c 7300 0000 0000 0000 0000 | /bin/ls......... |
+| 0x0000ffffffffffe0 | 2f00 0000 0000 0000 0000 0000 0000 0000 | /............... |
+| 0x0000ffffffffffd0 | 5041 5448 3d2f 6269 6e00 0000 0000 0000 | PATH=/bin....... |
+| 0x0000ffffffffffc0 | 545a 3d4a 5354 2d39 0000 0000 0000 0000 | TZ=JST-9........ |
+| 0x0000ffffffffffb0 | 0000 0000 0000 0000 0000 0000 0000 0000 | ................ |
+| 0x0000ffffffffffa0 | 0600 0000 0000 0000 0010 0000 0000 0000 | ................ |
+| 0x0000ffffffffff90 | c0ff ffff ffff 0000 0000 0000 0000 0000 | ................ |
+| 0x0000ffffffffff80 | 0000 0000 0000 0000 d0ff ffff ffff 0000 | ................ |
+| 0x0000ffffffffff70 | f0ff ffff ffff 0000 e0ff ffff ffff 0000 | ................ |
+| 0x0000ffffffffff60 | 0200 0000 0000 0000 0000 0000 0000 0000 | ................ |
++--------------------+-----------------------------------------+------------------+
+
+[1]exec#L239: path: /bin/ls, pid 3 exec ok, return 2
+[1]sys_fstatat#L231: dirfd: -100, path: /bin/ls, flags: 0x100
+[1]fileopen#L232: proc[3], path: /bin/ls, fd: 3, flags: 671744, mode: 0x81ed
+[1]sys_brk#L42: name: ls, sz: 0x40f000, newsz: 0x411000, incr: 0x2000
+[1]sys_brk#L46: ret: 0x411000
+[1]sys_mmap#L55: addr: 0x40f000, length: 0x1000, prot: 0x0, flags: 0x32, fd: -1, offset: 0x0
+[1]sys_mmap#L55: addr: 0x0, length: 0x0, prot: 0x3, flags: 0x22, fd: -1, offset: 0x0            // length 0のmmap
+[1]sys_mmap#L72: invalid length: 0 or offset: 0
+[1]fileclose#L248: f: inum: 0, ref: 0
+PANIC [1]acquire#L18: file is locked
+```
+
+- xv6版に完全に合わせた
+
+```bash
+$ /bin/ls /
+[1]sys_brk#L42: name: sh, sz: 0x40b000, newsz: 0x40c000, incr: 0x1000
+[1]sys_brk#L46: ret: 0x40c000
+[1]exec#L52: pid: 3, path: /bin/ls, argv: 0xffff000042031cd0, envp: 0xffff000042031dd0, argc: 2, envc: 2
+=== stack dump (descending) ===
++--------------------+-----------------------------------------+------------------+
+| 0x0000fffffffffff0 | 3d2f 6269 6e00 2f00 2f62 696e 2f6c 7300 | =/bin././bin/ls. |
+| 0x0000ffffffffffe0 | 0000 0054 5a3d 4a53 542d 3900 5041 5448 | ...TZ=JST-9.PATH |
+| 0x0000ffffffffffd0 | 0010 0000 0000 0000 0000 0000 0000 0000 | ................ |
+| 0x0000ffffffffffc0 | 0000 0000 0000 0000 0600 0000 0000 0000 | ................ |
+| 0x0000ffffffffffb0 | ecff ffff ffff 0000 e3ff ffff ffff 0000 | ................ |
+| 0x0000ffffffffffa0 | f6ff ffff ffff 0000 0000 0000 0000 0000 | ................ |
+| 0x0000ffffffffff90 | 0200 0000 0000 0000 f8ff ffff ffff 0000 | ................ |
++--------------------+-----------------------------------------+------------------+
+
+[1]exec#L239: path: /bin/ls, pid 3 exec ok, return 2
+[1]sys_fstatat#L231: dirfd: -100, path: /, flags: 0x100
+[1]fileopen#L232: proc[3], path: /, fd: 3, flags: 671744, mode: 0x41fd
+[1]sys_brk#L42: name: ls, sz: 0x40f000, newsz: 0x411000, incr: 0x2000
+[1]sys_brk#L46: ret: 0x411000
+[1]sys_mmap#L55: addr: 0x40f000, length: 0x1000, prot: 0x0, flags: 0x32, fd: -1, offset: 0x0
+[1]sys_mmap#L55: addr: 0x0, length: 0x2000, prot: 0x3, flags: 0x22, fd: -1, offset: 0x0             // 正しいlengthとなった
+[1]show_invalid_entry_message#L234: SYNC_INVALID_EL1h, esr: 0x0000000096000004, elr: 0xffff000042009f30, far: 0xfffffffff7f1ddfe
+[1]show_invalid_entry_message#L237: online esr decoder: https://esr.arm64.dev/#0x0000000096000004
+```
+
+- init->mm->vmasが書き換えられる
+
+```bash
+[1]init#L262: start arg: 0x0
+[1]init#L264: pid: 1
+[1]kernel_process#L120: Kernel process started at EL 1, pid 1
+[1]alloc_mm#L610: mm: 0xffff00004204f000, vmas: 0x0             // mmを割り当てた際は 0
+[1]fsinit#L57: fsinit ok
+[1]kernel_process#L131: move_to_user_mode ok
+[1]exec#L52: pid: 1, path: /bin/init, argv: 0xffff000042030cd0, envp: 0xffff000042030dd0, argc: 0, envc: 0
+[1]exec#L239: path: /bin/init, pid 1 exec ok, return 0
+[1]fileopen#L232: proc[1], path: /dev/console, fd: 0, flags: 131074, mode: 0x21b6
+[1]sys_clone#L137: clone user process
+[1]copy_process#L677: cur init, pid: 1, mm: 0xffff00004204f000, mm->vmas0: 0xffffffffd7d0ddce   // 不正な値に置き換わっている
+[1]copy_process#L680: reset vmas of pid 1 from 0xfffffffff7f1ddee to 0                          // 強制的に0に戻した
+[1]alloc_mm#L610: mm: 0xffff00004204f348, vmas: 0x0
+[1]copy_vmas#L324: parent mm: 0xffff00004204f000, mm->vmas: 0x0                                 // 戻さないとここでエラー
+[1]copy_vmas#L328: init does not have mm or mm->vmas
+[1]sys_clone#L140: pid: 2
+[1]exec#L52: pid: 2, path: /bin/sh, argv: 0xffff000042031cd0, envp: 0xffff000042031dd0, argc: 1, envc: 3
+[1]exec#L239: path: /bin/sh, pid 2 exec ok, return 1
+[1]fileopen#L232: proc[2], path: /dev/console, fd: 3, flags: 131074, mode: 0x21b6
+$ /bin/ls /                                                                                     // 戻すとshまでたどり着く
+[1]sys_clone#L137: clone user process
+[1]alloc_mm#L610: mm: 0xffff00004204f690, vmas: 0x0
+[1]copy_vmas#L324: parent mm: 0xffff00004204f348, mm->vmas: 0xfffffffff7f1ddce                  // また不正な値に置き換わる
+[1]copy_vmas#L341: vma: 0xffff0000507aa154
+[1]show_invalid_entry_message#L234: SYNC_INVALID_EL1h, esr: 0x0000000096000004, elr: 0xffff000042009d0c, far: 0xfffffffff7f1e
+[1]show_invalid_entry_message#L237: online esr decoder: https://esr.arm64.dev/#0x0000000096000004
+```
+
+- exec.cの段階で設定されている
+
+```bash
+[1]init#L262: start arg: 0x0
+[1]init#L264: pid: 1
+[1]kernel_process#L120: Kernel process started at EL 1, pid 1
+[1]alloc_mm#L610: mm: 0xffff00004204f000, vmas: 0x0
+[1]fsinit#L57: fsinit ok
+[1]kernel_process#L131: move_to_user_mode ok
+[1]exec#L52: pid: 1, path: /bin/init, argv: 0xffff000042030cd0, envp: 0xffff000042030dd0, argc: 0, envc: 0
+[1]exec#L231: pid: 1, p->mm: ffff00004204f000, p->mm->sz: 0x404000, vmas: 0xfffffffffffffdff    // exec.cを抜ける直前で既に設定
+[1]exec#L239: path: /bin/init, pid 1 exec ok, return 0
+[1]fileopen#L232: proc[1], path: /dev/console, fd: 0, flags: 131074, mode: 0x21b6
+[1]sys_clone#L131: pid: 1, mm: 0xffff00004204f000, mm->vmas: 0xfffffffffffffdff
+[1]alloc_mm#L610: mm: 0xffff00004204f348, vmas: 0x0
+[1]copy_vmas#L324: parent mm: 0xffff00004204f000, mm->vmas: 0xfffffffffffffdff
+[1]copy_vmas#L341: vma: 0xffff0000507d1154
+[1]show_invalid_entry_message#L234: SYNC_INVALID_EL1h, esr: 0x0000000096000004, elr: 0xffff000042009b9c, far: 0xfffffffffffff
+[1]show_invalid_entry_message#L237: online esr decoder: https://esr.arm64.dev/#0x0000000096000004
+```
+
+- exec.cでvmasを0に戻す（これではダメか、親から引き継いだ情報はいずれ消去するのでこれでOKか）
+
+```bash
+[1]init#L264: pid: 1
+[1]kernel_process#L120: Kernel process started at EL 1, pid 1
+[1]alloc_mm#L610: mm: 0xffff00004204f000, vmas: 0x0
+[1]fsinit#L57: fsinit ok
+[1]kernel_process#L131: move_to_user_mode ok
+[1]exec#L52: pid: 1, path: /bin/init, argv: 0xffff000042030cd0, envp: 0xffff000042030dd0, argc: 0, envc: 0
+[1]exec#L232: pid: 1, p->mm: ffff00004204f000, p->mm->sz: 0x404000, vmas: 0x0
+[1]exec#L240: path: /bin/init, pid 1 exec ok, return 0
+[1]fileopen#L232: proc[1], path: /dev/console, fd: 0, flags: 131074, mode: 0x21b6
+[1]sys_clone#L131: pid: 1, mm: 0xffff00004204f000, mm->vmas: 0x0
+[1]alloc_mm#L610: mm: 0xffff00004204f348, vmas: 0x0
+[1]copy_vmas#L324: parent mm: 0xffff00004204f000, mm->vmas: 0x0
+[1]copy_vmas#L328: init does not have mm or mm->vmas
+[1]exec#L52: pid: 2, path: /bin/sh, argv: 0xffff000042031cd0, envp: 0xffff000042031dd0, argc: 1, envc: 3
+[1]exec#L232: pid: 2, p->mm: ffff00004204f348, p->mm->sz: 0x40b000, vmas: 0x0
+[1]exec#L240: path: /bin/sh, pid 2 exec ok, return 1
+[1]fileopen#L232: proc[2], path: /dev/console, fd: 3, flags: 131074, mode: 0x21b6
+$ /bin/ls /
+[1]sys_clone#L131: pid: 2, mm: 0xffff00004204f348, mm->vmas: 0x0
+[1]alloc_mm#L610: mm: 0xffff00004204f690, vmas: 0x0
+[1]copy_vmas#L324: parent mm: 0xffff00004204f348, mm->vmas: 0x0
+[1]copy_vmas#L328: sh does not have mm or mm->vmas
+[1]sys_brk#L42: name: sh, sz: 0x40b000, newsz: 0x40c000, incr: 0x1000
+[1]sys_brk#L46: ret: 0x40c000
+[1]exec#L52: pid: 3, path: /bin/ls, argv: 0xffff000042032cd0, envp: 0xffff000042032dd0, argc: 2, envc: 2
+[1]exec#L232: pid: 3, p->mm: ffff00004204f690, p->mm->sz: 0x40f000, vmas: 0x0
+[1]exec#L240: path: /bin/ls, pid 3 exec ok, return 2
+[1]sys_fstatat#L231: dirfd: -100, path: /, flags: 0x100
+[1]fileopen#L232: proc[3], path: /, fd: 3, flags: 671744, mode: 0x41fd
+[1]sys_brk#L42: name: ls, sz: 0x40f000, newsz: 0x411000, incr: 0x2000
+[1]sys_brk#L46: ret: 0x411000
+[1]sys_mmap#L55: addr: 0x40f000, length: 0x1000, prot: 0x0, flags: 0x32, fd: -1, offset: 0x0
+[1]mmap#L578: addr: 0x40f000, length: 0x1000, prot: 0x0, flags: 0x32, f: 0, off: 0x0
+[1]sys_mmap#L55: addr: 0x0, length: 0x2000, prot: 0x3, flags: 0x22, fd: -1, offset: 0x0
+[1]mmap#L578: addr: 0x0, length: 0x2000, prot: 0x3, flags: 0x22, f: 0, off: 0x0
+[1]mmap#L661: vma: 0xffff0000507af154
+[1]map_anon_pages#L245: pid[3] map addr 0xfff000000000 to page 0xffff0000507d6000 with perm 0x6000000000074b
+[1]uvm_map#L557: v: 0xfff000000000, *pte: 0x507d6707
+PANIC [1]uvm_map#L558: remap: 0xfff000000000            // remapが発生: このアドレスは MMAP_BASE に等しい（最初の割り当て）
+```
+
+- uvm_map()内のmap_page()でマッピングをしているのでここでremapの判定をしてはダメ
+    - remap判定と*pte設定を削除
+    - また別のエラー発生
+
+```bash
+[1]init#L262: start arg: 0x0
+[1]init#L264: pid: 1
+[1]kernel_process#L120: Kernel process started at EL 1, pid 1
+[1]alloc_mm#L610: mm: 0xffff00004204f000, vmas: 0x0
+[1]fsinit#L57: fsinit ok
+[1]kernel_process#L131: move_to_user_mode ok
+[1]exec#L52: pid: 1, path: /bin/init, argv: 0xffff000042030cd0, envp: 0xffff000042030dd0, argc: 0, envc: 0
+[1]exec#L232: pid: 1, p->mm: ffff00004204f000, p->mm->sz: 0x404000, vmas: 0x0
+[1]exec#L240: path: /bin/init, pid 1 exec ok, return 0
+[1]fileopen#L232: proc[1], path: /dev/console, fd: 0, flags: 131074, mode: 0x21b6
+[1]sys_clone#L131: pid: 1, mm: 0xffff00004204f000, mm->vmas: 0x0
+[1]alloc_mm#L610: mm: 0xffff00004204f348, vmas: 0x0
+[1]copy_vmas#L324: parent mm: 0xffff00004204f000, mm->vmas: 0x0
+[1]copy_vmas#L328: init does not have mm or mm->vmas
+[1]exec#L52: pid: 2, path: /bin/sh, argv: 0xffff000042031cd0, envp: 0xffff000042031dd0, argc: 1, envc: 3
+[1]exec#L232: pid: 2, p->mm: ffff00004204f348, p->mm->sz: 0x40b000, vmas: 0x0
+[1]exec#L240: path: /bin/sh, pid 2 exec ok, return 1
+[1]fileopen#L232: proc[2], path: /dev/console, fd: 3, flags: 131074, mode: 0x21b6
+$ /bin/ls /
+[1]sys_clone#L131: pid: 2, mm: 0xffff00004204f348, mm->vmas: 0x0
+[1]alloc_mm#L610: mm: 0xffff00004204f690, vmas: 0x0
+[1]copy_vmas#L324: parent mm: 0xffff00004204f348, mm->vmas: 0x0
+[1]copy_vmas#L328: sh does not have mm or mm->vmas
+[1]sys_brk#L42: name: sh, sz: 0x40b000, newsz: 0x40c000, incr: 0x1000
+[1]sys_brk#L46: ret: 0x40c000
+[1]exec#L52: pid: 3, path: /bin/ls, argv: 0xffff000042032cd0, envp: 0xffff000042032dd0, argc: 2, envc: 2
+[1]exec#L232: pid: 3, p->mm: ffff00004204f690, p->mm->sz: 0x40f000, vmas: 0x0
+[1]exec#L240: path: /bin/ls, pid 3 exec ok, return 2
+[1]sys_fstatat#L231: dirfd: -100, path: /, flags: 0x100
+[1]fileopen#L232: proc[3], path: /, fd: 3, flags: 671744, mode: 0x41fd
+[1]sys_brk#L42: name: ls, sz: 0x40f000, newsz: 0x411000, incr: 0x2000
+[1]sys_brk#L46: ret: 0x411000
+[1]sys_mmap#L55: addr: 0x40f000, length: 0x1000, prot: 0x0, flags: 0x32, fd: -1, offset: 0x0
+[1]mmap#L578: addr: 0x40f000, length: 0x1000, prot: 0x0, flags: 0x32, f: 0, off: 0x0
+[1]sys_mmap#L55: addr: 0x0, length: 0x2000, prot: 0x3, flags: 0x22, fd: -1, offset: 0x0
+[1]mmap#L578: addr: 0x0, length: 0x2000, prot: 0x3, flags: 0x22, f: 0, off: 0x0
+[1]mmap#L661: vma: 0xffff0000507af154
+[1]map_anon_pages#L245: pid[3] map addr 0xfff000000000 to page 0xffff0000507d6000 with perm 0x6000000000074b
+[1]uvm_map#L557: v: 0xfff000000000, *pte: 0x507d6707
+[1]map_anon_pages#L245: pid[3] map addr 0xfff000001000 to page 0xffff0000507b7000 with perm 0x6000000000074b
+[1]uvm_map#L557: v: 0xfff000001000, *pte: 0x507b7707
+[1]do_mem_abort#L650: cannot handle: not translation fault.         // 割り当てた仮想メモリへの書き込みエラー
+FAR 0x0000fff000000000
+ESR 0x9200004f
+ELR 0x00000000004020c8
+[1]do_mem_abort#L652: online esr decoder: https://esr.arm64.dev/#0x000000009200004f
+show_stack_user: Call trace (pid 3 ls):
+addr2line -e ./usr/build/ls.debug \
+0x4020c4 \
+0x400070 \
+0x400b28 \
+[1]show_invalid_entry_message#L234: SYNC_INVALID_EL1h, esr: 0x0000000096000006, elr: 0xffff00004201bea0, far: 0x0000000000004
+[1]show_invalid_entry_message#L237: online esr decoder: https://esr.arm64.dev/#0x0000000096000006
+```
+
+- uvm_mapでpteフラグでMM_AP_RWを設定していなかっため、ユーザモードでwriteできなかった
+- free_user_page_range()でassert(mm->user_pages_count > 0)のassertionエラー
+    - exec.cの段階で不正値が発生していた
+    - exec.cで一時的に作成するtmpmmが単にkalloc()した領域をstruct mm_structとして使用し、
+      user_pages_countを0クリアしていないためだった(kalloc()はメモリの0クリアをしないため)
+    - これを修正することでlsが動いたが別のエラー発生
+- 2重release()でwait4()で発生。sleep()を抜けた段階でsched_lockはreleaseされていたためだった。
+- ようやくエラーがなくなった
+
+```bash
+$ /bin/ls /
+[1]sys_clone#L131: pid: 2, mm: 0xffff00004204f348, mm->vmas: 0x0
+[1]alloc_mm#L610: mm: 0xffff00004204f690, vmas: 0x0
+[1]copy_vmas#L324: parent mm: 0xffff00004204f348, mm->vmas: 0x0
+[1]copy_vmas#L328: sh does not have mm or mm->vmas
+[1]sys_brk#L42: name: sh, sz: 0x40b000, newsz: 0x40c000, incr: 0x1000
+[1]sys_brk#L46: ret: 0x40c000
+[1]exec#L52: pid: 3, path: /bin/ls, argv: 0xffff000042032cd0, envp: 0xffff000042032dd0, argc: 2, envc: 2
+[1]exec#L232: pid: 3, p->mm: ffff00004204f690, p->mm->sz: 0x40f000, vmas: 0x0
+[1]exec#L240: path: /bin/ls, pid 3 exec ok, return 2
+[1]sys_fstatat#L231: dirfd: -100, path: /, flags: 0x100
+[1]fileopen#L232: proc[3], path: /, fd: 3, flags: 671744, mode: 0x41fd
+[1]sys_brk#L42: name: ls, sz: 0x40f000, newsz: 0x411000, incr: 0x2000
+[1]sys_brk#L46: ret: 0x411000
+[1]sys_mmap#L55: addr: 0x40f000, length: 0x1000, prot: 0x0, flags: 0x32, fd: -1, offset: 0x0
+[1]mmap#L578: addr: 0x40f000, length: 0x1000, prot: 0x0, flags: 0x32, f: 0, off: 0x0
+[1]sys_mmap#L55: addr: 0x0, length: 0x2000, prot: 0x3, flags: 0x22, fd: -1, offset: 0x0
+[1]mmap#L578: addr: 0x0, length: 0x2000, prot: 0x3, flags: 0x22, f: 0, off: 0x0
+[1]mmap#L661: vma: 0xffff0000507af154
+[1]map_anon_pages#L245: pid[3] map addr 0xfff000000000 to page 0xffff0000507d6000 with perm 0x6000000000074b
+[1]uvm_map#L557: v: 0xfff000000000, *pte: 0x507d6747
+[1]map_anon_pages#L245: pid[3] map addr 0xfff000001000 to page 0xffff0000507b7000 with perm 0x6000000000074b
+[1]uvm_map#L557: v: 0xfff000001000, *pte: 0x507b7747
+[1]sys_fstatat#L231: dirfd: -100, path: /., flags: 0x0
+drwxrwxr-x    1 anon anon  2026-11-14 01:15:30   4096 .
+[1]sys_fstatat#L231: dirfd: -100, path: /.., flags: 0x0
+[1]sys_fstatat#L231: dirfd: -100, path: /bin, flags: 0x0
+[1]sys_fstatat#L231: dirfd: -100, path: /dev, flags: 0x0
+[1]sys_fstatat#L231: dirfd: -100, path: /proc, flags: 0x0
+[1]sys_fstatat#L231: dirfd: -100, path: /lib, flags: 0x0
+[1]sys_fstatat#L231: dirfd: -100, path: /test.txt, flags: 0x0
+[1]free_user_page_range#L531: page: pa=0x507d6000, va=0xffff0000507d6000, upcount: -1073741805      // mm->user_pages_countに不正値
+PANIC [1]free_user_page_range#L532: kern/vm.c:532: assertion failed.
+```
+
+- exec.cの段階で不正値が発生
+
+```bash
+[1]exec#L52: pid: 1, path: /bin/init, argv: 0xffff000042031cd0, envp: 0xffff000042031dd0, argc: 0, envc: 0
+[1]map_page#L263: user_pages_count: -1073741825
+```
+
+- lsが動くが別のエラー
+
+```bash
+drwxrwxr-x    1 anon anon  2026-11-14 01:15:30   4096 ..
+drwxrwxr-x    2 anon anon  2026-11-14 01:15:30    512 bin
+drwxrwxr-x    3 anon anon  2026-11-14 01:15:30    192 dev
+drwxr-xr-x    4 anon anon  2026-11-14 01:15:30    128 proc
+drwxrwxrwx    5 anon anon  2026-11-14 01:15:30    128 lib
+-rwxr-xr-x    7 anon anon  2026-11-14 01:15:30     43 test.txt
+[1]free_user_page_range#L519: va: 0x400000, size: 0x11000
+[1]free_user_page_range#L532: page: pa=0x507a8000, va=0xffff0000507a8000, upcount: 19
+[1]free_user_page_range#L532: page: pa=0x507a3000, va=0xffff0000507a3000, upcount: 18
+[1]free_user_page_range#L532: page: pa=0x507a2000, va=0xffff0000507a2000, upcount: 17
+[1]free_user_page_range#L532: page: pa=0x507a1000, va=0xffff0000507a1000, upcount: 16
+[1]free_user_page_range#L532: page: pa=0x507a0000, va=0xffff0000507a0000, upcount: 15
+[1]free_user_page_range#L532: page: pa=0x5079f000, va=0xffff00005079f000, upcount: 14
+[1]free_user_page_range#L532: page: pa=0x5079e000, va=0xffff00005079e000, upcount: 13
+[1]free_user_page_range#L532: page: pa=0x5079d000, va=0xffff00005079d000, upcount: 12
+[1]free_user_page_range#L532: page: pa=0x5079c000, va=0xffff00005079c000, upcount: 11
+[1]free_user_page_range#L532: page: pa=0x5079b000, va=0xffff00005079b000, upcount: 10
+[1]free_user_page_range#L532: page: pa=0x5079a000, va=0xffff00005079a000, upcount: 9
+[1]free_user_page_range#L532: page: pa=0x50799000, va=0xffff000050799000, upcount: 8
+[1]free_user_page_range#L532: page: pa=0x50798000, va=0xffff000050798000, upcount: 7
+[1]free_user_page_range#L532: page: pa=0x50797000, va=0xffff000050797000, upcount: 6
+[1]free_user_page_range#L532: page: pa=0x50796000, va=0xffff000050796000, upcount: 5
+[1]free_user_page_range#L532: page: pa=0x507a9000, va=0xffff0000507a9000, upcount: 4
+[1]free_user_page_range#L532: page: pa=0x507aa000, va=0xffff0000507aa000, upcount: 3
+[1]free_mmap_list#L74: ls does not have mm or mm->vmas
+PANIC [1]release#L30: sched is not locked                   // このエラーはwait4()で発生していることが判明
+```
+- sh, ls, cat, echoが動く
+
+```bash
+$ /bin/ls /
+drwxrwxr-x    1 anon anon  2026-11-14 01:15:30   4096 .
+drwxrwxr-x    1 anon anon  2026-11-14 01:15:30   4096 ..
+drwxrwxr-x    2 anon anon  2026-11-14 01:15:30    512 bin
+drwxrwxr-x    3 anon anon  2026-11-14 01:15:30    192 dev
+drwxr-xr-x    4 anon anon  2026-11-14 01:15:30    128 proc
+drwxrwxrwx    5 anon anon  2026-11-14 01:15:30    128 lib
+-rwxr-xr-x    7 anon anon  2026-11-14 01:15:30     43 test.txt
+$ /bin/cat test.txt
+test 123
+abcdef
+2025-02-20
+123 test
+abcdef
+$ /bin/echo abc
+abc
+```
+
+- echoによる書き込みができない
+
+```bash
+$ /bin/echo abc > abc.txt
+[1]fileopen#L160: cant create abc.txt
+$ /bin/ls /                             // ストール
 ```

@@ -655,3 +655,19 @@ $ /bin/date 1793859320
 $ /bin/date
 2026年11日 5日 木曜日 15時15分42秒 JST
 ```
+
+## 書き込みができないことが判明
+
+```bash
+$ /bin/echo agc > abc.txt                                       // エラーにはならないが
+$ /bin/ls /
+drwxrwxr-x    1 anon anon  2026-11-14 01:15:30   4096 .
+drwxrwxr-x    1 anon anon  2026-11-14 01:15:30   4096 ..
+drwxrwxr-x    2 anon anon  2026-11-14 01:15:30    512 bin
+drwxrwxr-x    3 anon anon  2026-11-14 01:15:30    192 dev
+drwxr-xr-x    4 anon anon  2026-11-14 01:15:30    128 proc
+drwxrwxrwx    5 anon anon  2026-11-14 01:15:30    128 lib
+-rwxr-xr-x    7 anon anon  2026-11-14 01:15:30     43 test.txt
+[1]ilock#344: ip->inum: 14, type: 0, devno: 0x0, size: 0x4, mode: 0x81ed, addrs: 1350436808
+PANIC[1]ilock#346: ilock: no type
+```
