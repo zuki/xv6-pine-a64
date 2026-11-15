@@ -47,3 +47,5 @@ kern/mmc_save
 lock.txt
 tool/dump
 mkfs/mkfs
+
+docs/src/old/linux_initrd
