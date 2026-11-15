@@ -211,6 +211,7 @@ struct inode *ialloc(uint32_t dev, short type)
     int inum;
     struct buf *bp;
     struct dinode *dip;
+    trace("dev: %d, type: %d", dev, type);
 
     for (inum = 1; inum < sb.ninodes; inum++) {
         bp = bread(dev, IBLOCK(inum, sb));
@@ -220,6 +221,7 @@ struct inode *ialloc(uint32_t dev, short type)
             dip->type = type;
             bwrite(bp);
             brelse(bp);
+            dmb();
             return iget(dev, inum);
         }
         brelse(bp);
@@ -252,6 +254,7 @@ void iupdate(struct inode *ip)
     memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
     bwrite(bp);
     brelse(bp);
+    dmb();
 }
 
 /*
@@ -265,14 +268,13 @@ static struct inode *iget(uint32_t dev, uint32_t inum)
     struct timespec tp;
 
     acquire(&icache.lock);
-    trace("acq icache");
     // Is the inode already cached?
     empty = 0;
     for (ip = &icache.inode[0]; ip < &icache.inode[NINODE]; ip++) {
         if (ip->ref > 0 && ip->dev == dev && ip->inum == inum) {
             ip->ref++;
             release(&icache.lock);
-            trace("rel icache");
+            trace("inum=%d and dev=%d cache hit", ip->inum, ip->dev);
             return ip;
         }
         if (empty == 0 && ip->ref == 0) // Remember empty slot.
@@ -293,7 +295,7 @@ static struct inode *iget(uint32_t dev, uint32_t inum)
     memmove(&ip->mtime, &tp, sizeof(tp));
     memmove(&ip->ctime, &tp, sizeof(tp));
     release(&icache.lock);
-
+    trace("inum=%d and dev=%d created", ip->inum, ip->dev);
     return ip;
 }
 
@@ -340,11 +342,6 @@ void ilock(struct inode *ip)
         memmove(ip->addrs, dip->addrs, sizeof(ip->addrs));
         brelse(bp);
         ip->valid = 1;
-        if (ip->type == 0) {
-            debug("ip->inum: %d, type: %d, devno: 0x%x, size: 0x%x, mode: 0x%x, addrs: %d",
-                ip->inum, dip->type, dip->devno, dip->size, dip->mode, dip->addrs);
-            panic("ilock: no type");
-        }
     }
 }
 
@@ -603,6 +600,7 @@ ssize_t writei(struct inode *ip, int user_src, char *src, size_t off, size_t n)
         bwrite(bp);
         brelse(bp);
     }
+    dmb();
 
     if (n > 0 && off > ip->size) {
         ip->size = off;
@@ -627,6 +625,7 @@ struct inode *dirlookup(struct inode *dp, char *name, size_t *poff)
 {
     size_t off, inum;
     struct dirent de;
+    //struct inode *ip;
 
     if (dp->type != T_DIR)
         panic("dirlookup not DIR");
@@ -636,6 +635,7 @@ struct inode *dirlookup(struct inode *dp, char *name, size_t *poff)
             panic("dirlookup read");
         if (de.inum == 0)
             continue;
+        trace("de inum: %d, type: %d, name: %s", de.inum, de.type, de.name);
         if (namecmp(name, de.name) == 0) {
             // entry matches path element
             if (poff)

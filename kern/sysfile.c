@@ -349,9 +349,11 @@ static struct inode *create(char *path, short type, short major, short minor, mo
     if ((dp = nameiparent(path, name)) == 0)
         return 0;
     ilock(dp);
+    trace("path: %s, name: %s", path, name);
 
     if ((ip = dirlookup(dp, name, 0)) != 0) {
         iunlockput(dp);
+        trace("ilock ip %d, type %d", ip->inum, ip->type);
         ilock(ip);
         if (type == T_FILE && ip->type == T_FILE)
             return ip;
@@ -362,12 +364,14 @@ static struct inode *create(char *path, short type, short major, short minor, mo
     if ((ip = ialloc(dp->dev, type)) == 0)
         panic("create: ialloc");
 
+    trace("ilock ip %d", ip->inum);
     ilock(ip);
     ip->devno = makedev(major, minor);
     ip->nlink = 1;
     ip->mode = mode;
     ip->type = type;
-    iupdate(ip);
+    iupdate(ip);            // ここで初めてdinodeに書き込まれる
+    dmb();
 
     if (type == T_DIR) {        // Create . and .. entries.
         dp->nlink++;            // for ".."
@@ -380,6 +384,8 @@ static struct inode *create(char *path, short type, short major, short minor, mo
 
     if (dirlink(dp, name, ip->inum, ip->type) < 0)
         panic("create: dirlink");
+
+    trace("ip id=%d, type=%d", ip->inum, ip->type);
 
     iunlockput(dp);
 
@@ -406,7 +412,7 @@ long sys_openat()
         warn("expect O_LARGEFILE in open flags");
         return -1;
     }
-    trace("dirfd %d, path '%s', flag 0x%x", dirfd, path, flags);
+    trace("dirfd %d, path '%s', flag 0x%x, mode: 0x%x", dirfd, path, flags, mode);
 
     if (flags & O_CREAT) {
         trace("create");
@@ -415,6 +421,7 @@ long sys_openat()
         if (ip == 0) {
             return -1;
         }
+        trace("created ip %d", ip->inum);
     } else {
         if ((ip = namei(path)) == 0 || ip->type == 0) {
             return -1;
@@ -449,7 +456,7 @@ long sys_openat()
     f->ip = ip;
     f->readable = !(flags & O_WRONLY);
     f->writable = (flags & O_WRONLY) || (flags & O_RDWR);
-
+    trace("ip id=%d, type=%d", ip->inum, ip->type);
     iunlock(ip);
     trace("path: %s, fd: %d", path, fd);
     return fd;
