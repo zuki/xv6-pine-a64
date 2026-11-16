@@ -12,7 +12,7 @@
 long sys_yield()
 {
     yield();
-    //wfi();
+    wfi();
     return 0;
 }
 
