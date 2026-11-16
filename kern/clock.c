@@ -53,13 +53,14 @@ void clock_init(void)
     initlock(&clocklock, "clock");
 
     // rtc_init()で設定
+    rtc_gettime(&xtime);
+    dmb();
 #if 0
     if (rtc_gettime(&xtime) < 0) {
         xtime.tv_nsec = 0L;
         xtime.tv_sec = 1793844559;  // 2026-11-05 11:09:19
     }
 #endif
-
     info("clock_init ok");
 }
 
@@ -76,7 +77,7 @@ void clock_intr(void *param)
     arm_vtimer_reset();
 }
 
-long clock_gettime(clockid_t clk_id, uint64_t tpp)
+long clock_gettime(clockid_t clk_id, uint64_t tpp, int user)
 {
     struct timespec tp;
     struct proc *p = thisproc();
@@ -90,7 +91,11 @@ long clock_gettime(clockid_t clk_id, uint64_t tpp)
             tp.tv_nsec = xtime.tv_nsec;
             tp.tv_sec = xtime.tv_sec;
             release(&clocklock);
-            ret = copyout(p->pgdir, (struct timespec *)tpp, &tp, sizeof(tp));
+            if (user)
+                ret = copyout(p->pgdir, (char *)tpp, (char *)&tp, sizeof(tp));
+            else
+                memmove((char *)tpp, (const char *)&tp, sizeof(tp));
+            //ret = copyout(p->pgdir, (struct timespec *)tpp, &tp, sizeof(tp));
             break;
         case CLOCK_PROCESS_CPUTIME_ID:
 #if 0
@@ -112,7 +117,7 @@ _sec, tp->tv_nsec);
     return ret;
 }
 
-long clock_settime(clockid_t clk_id, uint64_t tpp)
+long clock_settime(clockid_t clk_id, uint64_t tpp, int user)
 {
     struct timespec tp;
     int ret = 0;
@@ -122,13 +127,18 @@ long clock_settime(clockid_t clk_id, uint64_t tpp)
             ret = -EINVAL;
         case CLOCK_REALTIME:
             //if (capable(CAP_SYS_TIME)) {
-            if ((ret = copyin(thisproc()->pgdir, (char *)&tp, tpp, sizeof(tp))) < 0)
-                break;
+            if (user) {
+                if ((ret = copyin(thisproc()->pgdir, (char *)&tp, tpp, sizeof(tp))) < 0)
+                    break;
+            } else {
+                memmove((char *)&tp, (char *)tpp, sizeof(tp));
+            }
             acquire(&clocklock);
             xtime.tv_nsec = tp.tv_nsec;
             xtime.tv_sec = tp.tv_sec;
             release(&clocklock);
             rtc_settime(&tp);
+            dmb();
             //} else {
             //    return -EPERM;
             //}

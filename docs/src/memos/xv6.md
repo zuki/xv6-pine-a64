@@ -671,3 +671,63 @@ drwxrwxrwx    5 anon anon  2026-11-14 01:15:30    128 lib
 [1]ilock#344: ip->inum: 14, type: 0, devno: 0x0, size: 0x4, mode: 0x81ed, addrs: 1350436808
 PANIC[1]ilock#346: ilock: no type
 ```
+
+- ilock()のtypeチェックを削除した
+- 作成時が反映されない
+
+```bash
+$ /bin/date
+14745117年 9日13日 木曜日 22時 8分 3秒 JST
+$ /bin/ls /
+drwxrwxr-x    1 anon anon  2026-11-14 01:15:30   4096 .
+drwxrwxr-x    1 anon anon  2026-11-14 01:15:30   4096 ..
+drwxrwxr-x    2 anon anon  2026-11-14 01:15:30    512 bin
+drwxrwxr-x    3 anon anon  2026-11-14 01:15:30    192 dev
+drwxr-xr-x    4 anon anon  2026-11-14 01:15:30    128 proc
+drwxrwxrwx    5 anon anon  2026-11-14 01:15:30    128 lib
+-rwxr-xr-x    7 anon anon  2026-11-14 01:15:30     43 test.txt
+-rwxr-xr-x   14 anon anon  1970-01-01 00:00:00      4 abc.txt
+$ /bin/echo def > def.txt
+$ /bin/ls /
+drwxrwxr-x    1 anon anon  2026-11-14 01:15:30   4096 .
+drwxrwxr-x    1 anon anon  2026-11-14 01:15:30   4096 ..
+drwxrwxr-x    2 anon anon  2026-11-14 01:15:30    512 bin
+drwxrwxr-x    3 anon anon  2026-11-14 01:15:30    192 dev
+drwxr-xr-x    4 anon anon  2026-11-14 01:15:30    128 proc
+drwxrwxrwx    5 anon anon  2026-11-14 01:15:30    128 lib
+-rwxr-xr-x    7 anon anon  2026-11-14 01:15:30     43 test.txt
+-rwxr-xr-x   14 anon anon  1970-01-01 00:00:00      4 abc.txt
+-rwxr-xr-x   14 anon anon  1970-01-01 00:00:00      4 def.txt
+$ /bin/date 1794725957
+2026年11日15日 日曜日 15時59分17秒 JST
+```
+
+- rtc周りにバグがあった
+    - A64 RTCのyearは年数から1970を引いた数で0-63、monthは月から1を引いた数で0-11
+    - rtc_gettime()を修正。また、この関数はclockの初期化にだけ使用し、現在時が
+      必要な時はclock_gettime()を使うこととした。
+
+```bash
+$ /bin/ls /
+drwxrwxr-x    1 anon anon  2026-11-14 01:15:30   4096 .
+drwxrwxr-x    1 anon anon  2026-11-14 01:15:30   4096 ..
+drwxrwxr-x    2 anon anon  2026-11-14 01:15:30    512 bin
+drwxrwxr-x    3 anon anon  2026-11-14 01:15:30    192 dev
+drwxr-xr-x    4 anon anon  2026-11-14 01:15:30    128 proc
+drwxrwxrwx    5 anon anon  2026-11-14 01:15:30    128 lib
+-rwxr-xr-x    7 anon anon  2026-11-14 01:15:30     43 test.txt
+$ /bin/date
+2026年11日 5日 木曜日 20時56分16秒 JST      // rtc_init()で固定値で初期化した値
+$ /bin/date 1794796616
+2026年11日16日 月曜日 11時36分56秒 JST      // 現在時をセット
+$ /bin/echo abc > abc.txt
+$ /bin/ls
+drwxrwxr-x    1 anon anon  2026-11-14 01:15:30   4096 .
+drwxrwxr-x    1 anon anon  2026-11-14 01:15:30   4096 ..
+drwxrwxr-x    2 anon anon  2026-11-14 01:15:30    512 bin
+drwxrwxr-x    3 anon anon  2026-11-14 01:15:30    192 dev
+drwxr-xr-x    4 anon anon  2026-11-14 01:15:30    128 proc
+drwxrwxrwx    5 anon anon  2026-11-14 01:15:30    128 lib
+-rwxr-xr-x    7 anon anon  2026-11-14 01:15:30     43 test.txt
+-rwxr-xr-x   14 anon anon  2026-11-16 02:37:10      4 abc.txt       // 現在時でセットされている
+```

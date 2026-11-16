@@ -7,6 +7,7 @@
 #include <file.h>
 #include <console.h>
 #include <vm.h>
+#include <clock.h>
 #include <linux/errno.h>
 #include <linux/stat.h>
 #include <linux/fcntl.h>
@@ -121,6 +122,7 @@ ssize_t fileread(struct file *f, uint64_t addrp, ssize_t n, int user)
         ilock(f->ip);
         if ((r = readi(f->ip, user, (char *)addrp, f->off, n)) > 0)
             f->off += r;
+        clock_gettime(CLOCK_REALTIME, (uint64_t)&f->ip->atime, 0);
         iunlock(f->ip);
     } else {
         error("invalid file type: %d", f->type);
@@ -134,6 +136,7 @@ ssize_t fileread(struct file *f, uint64_t addrp, ssize_t n, int user)
 ssize_t filewrite(struct file *f, uint64_t addrp, ssize_t n, int user)
 {
     ssize_t r = 0;
+    struct timespec ts;
 
     trace("f: ino: %d, writeable: %d, type: %d, addrp: 0x%lx, size: %d",
         f->ip->inum, f->writable, f->type, addrp, n);
@@ -166,6 +169,8 @@ ssize_t filewrite(struct file *f, uint64_t addrp, ssize_t n, int user)
             ilock(f->ip);
             if ((r = writei(f->ip, user, (char *)addrp + i, f->off, n1)) > 0)
                 f->off += r;
+            clock_gettime(CLOCK_REALTIME, (uint64_t)&ts, 0);
+            f->ip->mtime = f->ip->atime = ts;
             iunlock(f->ip);
 
             if (r < 0)
@@ -277,7 +282,8 @@ int filewriteback(struct file *file, off_t offset, uint64_t addr)
 
     ilock(ip);
     r = writei(ip, 0, (char *)addr, offset, n);
-    //clock_gettime(CLOCK_REALTIME, &ts);
+    clock_gettime(CLOCK_REALTIME, (uint64_t)&ts, 0);
+    ip->mtime = ip->atime = ts;
     //memmove(&ip->mtime, &ts, sizeof(struct timespec));
     //memmove(&ip->atime, &ts, sizeof(struct timespec));
     iunlock(ip);

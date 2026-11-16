@@ -24,7 +24,7 @@
 #include <linux/stat.h>
 #include <linux/errno.h>
 #include <vm.h>
-#include <rtc.h>
+#include <clock.h>
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
@@ -290,7 +290,7 @@ static struct inode *iget(uint32_t dev, uint32_t inum)
     ip->inum = inum;
     ip->ref = 1;
     ip->valid = 0;
-    rtc_gettime(&tp);
+    clock_gettime(CLOCK_REALTIME, (uint64_t)&tp, 0);
     memmove(&ip->atime, &tp, sizeof(tp));
     memmove(&ip->mtime, &tp, sizeof(tp));
     memmove(&ip->ctime, &tp, sizeof(tp));

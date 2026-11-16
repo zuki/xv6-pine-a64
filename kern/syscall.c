@@ -143,16 +143,26 @@ long sys_exit() {
     return 0;
 }
 
+#include <vm.h>
+
 // int clock_gettime(clockid_t clock_id, struct timespec *tp);
 long sys_clock_gettime(void)
 {
     clockid_t clk_id;
     uint64_t tpp;
 
-    if (argint(0, (clockid_t *)&clk_id) < 0 || argu64(1, &tpp) < 0)
+    if (argint(0, &clk_id) < 0 || argu64(1, &tpp) < 0)
         return -EINVAL;
+#if 0
+    trace("clk_id: %d, tp: 0x%lx\n", clk_id, tpp);
+    long ret = clock_gettime(clk_id, tpp, 1);
+    struct timespec t;
+    copyin(thisproc()->pgdir, (char *)&t, tpp, sizeof(t));
+    trace("tv_sec: %ld", t.tv_sec);
+    return ret;
+#endif
 
-    return clock_gettime(clk_id, tpp);
+    return clock_gettime(clk_id, tpp, 1);
 }
 
 // int clock_settime(clockid_t clock_id, const struct timespec *tp);
@@ -164,9 +174,9 @@ long sys_clock_settime(void)
     if (argint(0, (clockid_t *)&clk_id) < 0 || argu64(1, &tpp) < 0)
         return -EINVAL;
 
-    trace("clk_id: %d, tp: 0x%p\n", clk_id, tp);
+    trace("clk_id: %d, tp: 0x%lx\n", clk_id, tpp);
 
-    return clock_settime(clk_id, tpp);
+    return clock_settime(clk_id, tpp, 1);
 }
 
 static func syscalls[] = {

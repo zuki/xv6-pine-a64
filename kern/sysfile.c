@@ -11,6 +11,7 @@
 #include <fs.h>
 #include <file.h>
 #include <vm.h>
+#include <clock.h>
 #include <linux/errno.h>
 #include <linux/ioctl.h>
 #include <linux/termios.h>
@@ -89,7 +90,7 @@ ssize_t sys_read()
     ssize_t bytes = fileread(f, bufp, n, 1);
     char kbuf[bytes+1];
     copyin(thisproc()->pgdir, kbuf, bufp, bytes);
-    debug("read: %s, %ld bytes", kbuf, bytes);
+    trace("read: %s, %ld bytes", kbuf, bytes);
     return bytes;
 #endif
 
@@ -345,6 +346,8 @@ static struct inode *create(char *path, short type, short major, short minor, mo
 {
     struct inode *ip, *dp;
     char name[DIRSIZ];
+    struct timespec ts;
+    int error = -EINVAL;
 
     if ((dp = nameiparent(path, name)) == 0)
         return 0;
@@ -370,26 +373,47 @@ static struct inode *create(char *path, short type, short major, short minor, mo
     ip->nlink = 1;
     ip->mode = mode;
     ip->type = type;
+    if ((error = clock_gettime(CLOCK_REALTIME, (uint64_t)&ts, 0)) < 0) {
+        error("clock_gettime failed");
+        goto fail;
+    }
+    trace("ts sec: 0x%lx, nsec: 0x%lx", ts.tv_sec, ts.tv_nsec);
+    ip->atime = ip->mtime = ip->ctime = ts;
+
     iupdate(ip);            // ここで初めてdinodeに書き込まれる
     dmb();
 
     if (type == T_DIR) {        // Create . and .. entries.
-        dp->nlink++;            // for ".."
         iupdate(dp);
         // No ip->nlink++ for ".": avoid cyclic ref count.
         if (dirlink(ip, ".", ip->inum, ip->type) < 0
-            || dirlink(ip, "..", dp->inum, dp->type) < 0)
-            panic("create dots");
+            || dirlink(ip, "..", dp->inum, dp->type) < 0) {
+                error("dirlink failed");
+                error = -ENOMEM;
+                goto fail;
+            }
     }
 
-    if (dirlink(dp, name, ip->inum, ip->type) < 0)
-        panic("create: dirlink");
+    if ((error = dirlink(dp, name, ip->inum, ip->type)) < 0) {
+        error("dirlink %s failed", name);
+        goto fail;
+    }
 
-    trace("ip id=%d, type=%d", ip->inum, ip->type);
+    if (type == T_DIR) {
+        dp->nlink++;
+        iupdate(dp);
+    }
 
     iunlockput(dp);
 
     return ip;
+
+fail:
+    ip->nlink = 0;
+    iupdate(ip);
+    iunlockput(ip);
+    iunlockput(dp);
+    return (void *)(long)error;
 }
 
 long sys_openat()

@@ -22,8 +22,8 @@ static int rtc_month_days(int month, int year)
 
 uint32_t get_yymmdd(uint32_t year, uint32_t month, uint32_t day)
 {
-    return ((year - SUNXI_YEARM_MIN) << RTC_YY_MM_DD_YEAR_SHIFT)
-        | (month << RTC_YY_MM_DD_MONTH_SHIFT) | (day << RTC_YY_MM_DD_DAY_SHIFT);
+    return ((year - SUNXI_YEAR_MIN) << RTC_YY_MM_DD_YEAR_SHIFT)
+        | ((month - 1) << RTC_YY_MM_DD_MONTH_SHIFT) | (day << RTC_YY_MM_DD_DAY_SHIFT);
 }
 
 uint32_t get_hhmmss(uint32_t wday, uint32_t hour, uint32_t minute, uint32_t second)
@@ -51,8 +51,8 @@ static time_t rtc_tm_to_time(const unsigned int year0, const unsigned int mon0,
         const unsigned int day, const unsigned int hour,
         const unsigned int min, const unsigned int sec)
 {
-    unsigned int year = year0 + 1900 - SUNXI_YEARM_MIN;
-    unsigned int mon = mon0;
+    unsigned int year = year0 + 1900;
+    unsigned int mon = mon0 + 1;
 
     /* 1..12 -> 11,12,1..10 */
     if (0 >= (mon -= 2)) {
@@ -110,6 +110,21 @@ static void rtc_time_to_tm(time_t time, struct rtc_time *tm)
     tm->tm_isdst = 0;
 }
 
+static time_t rtc_get_now(void)
+{
+    uint32_t ymd = get32(RTC_YY_MM_DD_REG);
+    uint32_t hms = get32(RTC_HH_MM_SS_REG);
+
+    uint32_t year = (ymd >> RTC_YY_MM_DD_YEAR_SHIFT) & 0x3f;            // [21:16]: 6 bit : 0 - 63 : year - 1970
+    uint32_t mon  = (ymd >> RTC_YY_MM_DD_MONTH_SHIFT) & 0xf;            // [11:8]:  4 bit : 0 - 11
+    uint32_t day  = (ymd >> RTC_YY_MM_DD_DAY_SHIFT) & 0x1f;             // [4:0]:   5 bit : 1 - 31
+    uint32_t hour = (hms >> RTC_HH_MM_SS_HOUR_SHIFT) & 0x1f;            // [20:16]: 5 bit : 0 - 23
+    uint32_t min  = (hms >> RTC_HH_MM_SS_MINUTE_SHIFT) & 0x3f;          // [13:8]:  6 bit : 0 - 59
+    uint32_t sec  = (hms >> RTC_HH_MM_SS_SECOND_SHIFT) & 0x3f;          // [5:0]:   6 bit : 0 - 59
+
+    return rtc_tm_to_time(TM_YEAR_FROM_SUNXI(year), mon, day, hour, min, sec);
+}
+
 int rtc_settime(const struct timespec *tp)
 {
     struct rtc_time t;
@@ -120,8 +135,8 @@ int rtc_settime(const struct timespec *tp)
         t.tm_sec, t.tm_min, t.tm_hour, t.tm_mday, t.tm_mon, t.tm_year, t.tm_wday);
 
     int leap = is_leap_year(t.tm_year + 1900);
-    put32(RTC_YY_MM_DD_REG, ((leap << RTC_YY_MM_DD_LEAP) |
-        ((t.tm_year + 1900 - SUNXI_YEARM_MIN) << RTC_YY_MM_DD_YEAR_SHIFT) |
+    put32(RTC_YY_MM_DD_REG, ((leap << RTC_YY_MM_DD_LEAP_SHIFT) |
+        ((t.tm_year + 1900 - SUNXI_YEAR_MIN) << RTC_YY_MM_DD_YEAR_SHIFT) |
         ((t.tm_mon + 1) << RTC_YY_MM_DD_MONTH_SHIFT) |
         (t.tm_mday << RTC_YY_MM_DD_DAY_SHIFT)));
     put32(RTC_HH_MM_SS_REG, ((t.tm_wday << RTC_HH_MM_SS_WK_NO_SHIFT) |
@@ -129,20 +144,18 @@ int rtc_settime(const struct timespec *tp)
         (t.tm_min << RTC_HH_MM_SS_MINUTE_SHIFT) |
         (t.tm_sec << RTC_HH_MM_SS_SECOND_SHIFT)));
 
+    trace("RTC_YY_MM_DD: 0x%x", get32(RTC_YY_MM_DD_REG));
+    trace("RTC_HH_MM_SS: 0x%x", get32(RTC_HH_MM_SS_REG));
+
     return 0;
 }
 
 int rtc_gettime(struct timespec *tp)
 {
-    struct rtc_time t;
-
-    uint32_t ymd = get32(RTC_YY_MM_DD_REG);
-    uint32_t hms = get32(RTC_HH_MM_SS_REG);
-
-    tp->tv_sec = rtc_tm_to_time(t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
+    tp->tv_sec = rtc_get_now();
     tp->tv_nsec = 0L;
 
-    trace("tp_sec: %lld", tp->tv_sec);
+    trace("tp_sec: %ld", tp->tv_sec);
 
     return 0;
 

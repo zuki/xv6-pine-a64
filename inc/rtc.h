@@ -12,7 +12,7 @@
 #define     LOSC_CTRL_RTC_YYMMDD_ACCE     (1 << 7)
 #define     LOSC_CTRL_LOSC_SRC_SEL        (1 << 0)
 #define RTC_YY_MM_DD_REG    (RTC_BASE + 0x10)
-#define     RTC_YY_MM_DD_LEAP             (1 << 22)
+#define     RTC_YY_MM_DD_LEAP_SHIFT       (22)
 #define     RTC_YY_MM_DD_YEAR_SHIFT       (16)
 #define     RTC_YY_MM_DD_MONTH_SHIFT      (8)
 #define     RTC_YY_MM_DD_DAY_SHIFT        (0)
@@ -22,7 +22,8 @@
 #define     RTC_HH_MM_SS_MINUTE_SHIFT     (8)
 #define     RTC_HH_MM_SS_SECOND_SHIFT     (0)
 
-#define SUNXI_YEARM_MIN     1970
+#define SUNXI_YEAR_MIN              1970
+#define TM_YEAR_FROM_SUNXI(Y)       ((Y) + SUNXI_YEAR_MIN - 1900)
 
 enum weekday {
     MONDAY = 0,
@@ -39,8 +40,8 @@ struct rtc_time {
     int tm_min;
     int tm_hour;
     int tm_mday;
-    int tm_mon;
-    int tm_year;
+    int tm_mon;         // month - 1
+    int tm_year;        // year - 1900
     int tm_wday;
     int tm_yday;
     int tm_isdst;
